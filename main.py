@@ -130,6 +130,7 @@ class SlidingPuzzleApp:
         self.image_mode = False
         self.menu_buttons = []
         self.menu_selection_idx = 0
+        self.is_auto_solve_mode = False
 
         # Multi-image support
         self.available_images = discover_images(IMAGES_DIR)
@@ -202,6 +203,12 @@ class SlidingPuzzleApp:
         if self.image_mode:
             self._load_current_image()
 
+    def _restart_game(self):
+        """Restart the game, keeping auto-solve mode active if it was selected."""
+        self._start_new_game()
+        if self.is_auto_solve_mode:
+            self._start_auto_solve()
+
     def _toggle_size(self):
         """Cycle grid size: 3 -> 4 -> 3."""
         self.selected_size = 4 if self.selected_size == 3 else 3
@@ -266,6 +273,7 @@ class SlidingPuzzleApp:
         """Execute a selected menu action."""
         self._play(self.snd_click)
         if action == "new_game":
+            self.is_auto_solve_mode = False
             self._start_new_game()
         elif action == "grid_size":
             self._toggle_size()
@@ -283,6 +291,7 @@ class SlidingPuzzleApp:
                 else:
                     self._load_current_image()
         elif action == "auto_solve":
+            self.is_auto_solve_mode = True
             self._start_new_game()
             self._start_auto_solve()
         elif action == "quit":
@@ -322,14 +331,16 @@ class SlidingPuzzleApp:
             elif event.key == pygame.K_m:
                 self.state = STATE_MENU
                 self.auto_solving = False
+                self.is_auto_solve_mode = False
             elif event.key == pygame.K_r:
-                self._start_new_game()
+                self._restart_game()
             elif event.key == pygame.K_u:
                 if not self.auto_solving:
                     self._do_undo()
             elif event.key == pygame.K_ESCAPE:
                 self.state = STATE_MENU
                 self.auto_solving = False
+                self.is_auto_solve_mode = False
             elif not self.board.paused and not self.auto_solving:
                 direction_map = {
                     pygame.K_UP: "up",
@@ -350,7 +361,7 @@ class SlidingPuzzleApp:
                 if rect.collidepoint(event.pos):
                     self._play(self.snd_click)
                     if action == "restart":
-                        self._start_new_game()
+                        self._restart_game()
                     elif action == "undo":
                         if not self.auto_solving:
                             self._do_undo()
@@ -359,6 +370,7 @@ class SlidingPuzzleApp:
                     elif action == "menu":
                         self.state = STATE_MENU
                         self.auto_solving = False
+                        self.is_auto_solve_mode = False
                     return
 
             if not self.board.paused and not self.auto_solving:
@@ -378,10 +390,11 @@ class SlidingPuzzleApp:
         """Process events on the win screen."""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_r:
-                self._start_new_game()
+                self._restart_game()
             elif event.key in (pygame.K_m, pygame.K_ESCAPE):
                 self.state = STATE_MENU
                 self.auto_solving = False
+                self.is_auto_solve_mode = False
 
     # ------------------------------------------------------------------
     # Update / auto-solve tick
@@ -391,7 +404,7 @@ class SlidingPuzzleApp:
         self.renderer.update_animations(dt)
 
         # Auto-solve step
-        if self.auto_solving and self.state == STATE_PLAYING:
+        if self.auto_solving and self.state == STATE_PLAYING and not self.board.paused:
             if not self.renderer.is_animating():
                 self.auto_solve_timer += dt
                 if self.auto_solve_timer >= self.auto_solve_delay:
