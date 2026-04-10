@@ -197,6 +197,7 @@ class Renderer:
     # ------------------------------------------------------------------
     def _init_fonts(self):
         """Load system fonts with fallback to PyGame defaults."""
+        self.font_title = pygame.font.Font(None, 80)
         self.font_large = pygame.font.Font(None, 72)
         self.font_medium = pygame.font.Font(None, 44)
         self.font_small = pygame.font.Font(None, 30)
@@ -221,6 +222,7 @@ class Renderer:
                         "arial", "arialbd"
                     )
                     tf = bold if os.path.exists(bold) else path
+                    self.font_title = pygame.font.Font(tf, 58)
                     self.font_tile = pygame.font.Font(tf, 48)
                     self.font_tile_sm = pygame.font.Font(tf, 34)
                 except Exception:
@@ -776,33 +778,31 @@ class Renderer:
         cx = self.WIN_W // 2
 
         # Animated title glow
-        glow_alpha = int(15 + 8 * math.sin(self._time * 2))
-        title = self.font_large.render("Sliding Puzzle", True, COLORS["title"])
+        glow_alpha = int(25 + 15 * math.sin(self._time * 2))
+        title = self.font_title.render("SLIDING PUZZLE", True, (255, 255, 255))
         tr = title.get_rect(center=(cx, 80))
-        glow = pygame.Surface(
-            (title.get_width() + 80, title.get_height() + 40), pygame.SRCALPHA
-        )
-        glow.fill((*COLORS["title_glow"], glow_alpha))
-        self.screen.blit(glow, (tr.x - 40, tr.y - 20))
-        # Title shadow
-        title_s = self.font_large.render("Sliding Puzzle", True, (20, 30, 60))
-        title_s.set_alpha(80)
-        self.screen.blit(title_s, (tr.x + 2, tr.y + 2))
+        
+        # Super nice modern soft glow behind title
+        glow = pygame.Surface((title.get_width() + 100, title.get_height() + 60), pygame.SRCALPHA)
+        pygame.draw.ellipse(glow, (*COLORS["title_glow"], glow_alpha), glow.get_rect())
+        self.screen.blit(glow, (tr.x - 50, tr.y - 30))
+
+        # Sharp shadow for text
+        title_s = self.font_title.render("SLIDING PUZZLE", True, (0, 0, 0))
+        title_s.set_alpha(150)
+        self.screen.blit(title_s, (tr.x + 2, tr.y + 3))
         self.screen.blit(title, tr)
 
         # Subtitle
-        sub = self.font_small.render(
-            "A Classic Logic Puzzle Game", True, (120, 125, 155)
+        sub = self.font_medium.render(
+            "A Classic Logic Puzzle Game", True, (160, 175, 205)
         )
-        self.screen.blit(sub, sub.get_rect(center=(cx, 130)))
+        self.screen.blit(sub, sub.get_rect(center=(cx, 134)))
 
-        # Decorative line
-        line_surf = pygame.Surface((200, 2), pygame.SRCALPHA)
-        for x in range(200):
-            t = x / 200
-            a = int(60 * math.sin(t * math.pi))
-            pygame.draw.line(line_surf, (100, 140, 255, a), (x, 0), (x, 1))
-        self.screen.blit(line_surf, (cx - 100, 148))
+        # Decorative modern bar
+        bar = pygame.Surface((60, 4), pygame.SRCALPHA)
+        bar.fill((100, 140, 255, 200))
+        self.screen.blit(bar, (cx - 30, 160))
 
         # Menu buttons
         img_label = image_name if image_mode and image_name else "Numbers"
@@ -815,8 +815,8 @@ class Renderer:
             items.append(("Auto Solve (3x3)", "auto_solve"))
         items.append(("Quit", "quit"))
 
-        bw, bh, spacing = 340, 50, 60
-        start_y = 175
+        bw, bh, spacing = 360, 56, 68
+        start_y = 195
         mouse = pygame.mouse.get_pos()
         buttons = []
 
@@ -824,35 +824,43 @@ class Renderer:
             rect = pygame.Rect(cx - bw // 2, start_y + i * spacing, bw, bh)
             hov = rect.collidepoint(mouse) or (i == selected_idx)
 
-            # Button with gradient border
-            btn_surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
-            bg_color = COLORS["button_hover"] if hov else COLORS["button"]
-            pygame.draw.rect(
-                btn_surf, (*bg_color, 200),
-                pygame.Rect(0, 0, bw, bh),
-                border_radius=12,
-            )
-            if hov:
-                # Glow border
-                pygame.draw.rect(
-                    btn_surf, (*COLORS["button_border"], 180),
-                    pygame.Rect(0, 0, bw, bh),
-                    2, border_radius=12,
-                )
-                # Top highlight
-                hl = pygame.Surface((bw - 8, bh // 3), pygame.SRCALPHA)
-                hl.fill((255, 255, 255, 15))
-                btn_surf.blit(hl, (4, 2))
-            else:
-                pygame.draw.rect(
-                    btn_surf, (60, 70, 120, 80),
-                    pygame.Rect(0, 0, bw, bh),
-                    1, border_radius=12,
-                )
+            # Drop shadow
+            shadow = pygame.Surface((bw+8, bh+8), pygame.SRCALPHA)
+            pygame.draw.rect(shadow, (0, 0, 0, 50 if hov else 20), shadow.get_rect(), border_radius=14)
+            self.screen.blit(shadow, (rect.x-2, rect.y+2))
 
-            txt = self.font_small.render(label, True, COLORS["button_text"])
-            btn_surf.blit(txt, txt.get_rect(center=(bw // 2, bh // 2)))
+            # Glass pill button
+            btn_surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
+            bg_alpha = 45 if hov else 15
+            pygame.draw.rect(
+                btn_surf, (255, 255, 255, bg_alpha), pygame.Rect(0, 0, bw, bh), border_radius=14
+            )
+            
+            if hov:
+                # Sleek left bar accent
+                pygame.draw.rect(btn_surf, (100, 140, 255), pygame.Rect(14, bh//2 - 12, 4, 24), border_radius=2)
+                # Outer delicate glass border
+                pygame.draw.rect(btn_surf, (255, 255, 255, 100), pygame.Rect(0, 0, bw, bh), width=1, border_radius=14)
+            else:
+                pygame.draw.rect(btn_surf, (255, 255, 255, 30), pygame.Rect(0, 0, bw, bh), width=1, border_radius=14)
+
             self.screen.blit(btn_surf, rect.topleft)
+
+            # Elegant text placement
+            tc = (255, 255, 255) if hov else (190, 200, 220)
+            text_surf = self.font_medium.render(label, True, tc)
+            
+            # Left align the text for modern list look
+            txt_x = rect.x + 36 if hov else rect.x + 28
+            txt_y = rect.y + bh // 2 - text_surf.get_height() // 2
+            
+            self.screen.blit(text_surf, (txt_x, txt_y))
+            
+            if hov:
+                # Drawing an arrow indicator on the right edge
+                arrow = self.font_medium.render("›", True, (140, 170, 255))
+                self.screen.blit(arrow, (rect.right - 35, rect.y + bh//2 - arrow.get_height()//2 - 2))
+
             buttons.append((rect, action))
 
         # Footer
