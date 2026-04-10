@@ -708,7 +708,7 @@ class Renderer:
         self.screen.blit(txt, txt.get_rect(center=(cx, cy - 60)))
 
         # Stats in a glass card
-        card_w, card_h = 340, 50
+        card_w, card_h = 400, 56
         card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
         pygame.draw.rect(
             card, (40, 40, 70, 160),
@@ -720,7 +720,7 @@ class Renderer:
             pygame.Rect(0, 0, card_w, card_h),
             1, border_radius=12,
         )
-        m, s = divmod(int(board.elapsed_time), 60)
+        m, s = divmod(int(board.get_elapsed_time()), 60)
         stat = self.font_medium.render(
             f"Moves: {board.move_count}   Time: {m:02d}:{s:02d}",
             True, COLORS["hud_text"],

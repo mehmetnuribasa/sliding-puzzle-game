@@ -138,8 +138,8 @@ class Board:
 
         # Win detection
         if self.is_solved():
-            self.solved = True
             self.elapsed_time = self.get_elapsed_time()
+            self.solved = True
             self._update_best_score()
 
         return True
