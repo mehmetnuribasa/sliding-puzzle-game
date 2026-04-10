@@ -134,7 +134,7 @@ class Board:
             self.grid[br][bc],
         )
         self.move_count += 1
-        self.move_history.append((row, col))
+        self.move_history.append((br, bc))
 
         # Win detection
         if self.is_solved():
