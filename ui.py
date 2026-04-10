@@ -2,39 +2,139 @@
 UI module for the Sliding Puzzle Game.
 
 Handles all rendering: board, tiles, HUD, menus, animations, and
-win screen.  Uses a modern dark colour palette with smooth gradient
-tiles and slide animations.
+win screen.  Features a premium dark theme with particle effects,
+gradient backgrounds, glassmorphism elements, and smooth animations.
 """
 
 import os
 import math
+import random
 import pygame
 
 # ======================================================================
-# Colour palette — modern dark theme
+# Colour palette — premium dark theme with vibrant accents
 # ======================================================================
 COLORS = {
+    "bg_top": (12, 12, 30),
+    "bg_bottom": (25, 18, 45),
     "bg": (18, 18, 28),
-    "board_bg": (28, 28, 42),
+    "board_bg": (20, 20, 35),
+    "board_border": (60, 70, 140),
     "tile_text": (255, 255, 255),
-    "tile_correct": (40, 170, 80),
+    "tile_correct": (30, 180, 90),
     "tile_hover": (100, 130, 220),
-    "empty": (22, 22, 32),
-    "hud_bg": (22, 22, 34),
-    "hud_text": (180, 185, 200),
-    "hud_accent": (120, 150, 255),
-    "button": (50, 60, 110),
-    "button_hover": (70, 85, 150),
-    "button_text": (240, 240, 255),
-    "title": (120, 150, 255),
-    "win_text": (255, 215, 0),
-    "overlay": (0, 0, 0, 170),
+    "empty": (15, 15, 28),
+    "hud_bg": (15, 15, 28, 220),
+    "hud_text": (170, 175, 195),
+    "hud_accent": (100, 140, 255),
+    "hud_accent2": (180, 120, 255),
+    "button": (35, 40, 80),
+    "button_hover": (55, 65, 120),
+    "button_text": (230, 235, 255),
+    "button_border": (80, 100, 200),
+    "title": (100, 140, 255),
+    "title_glow": (80, 120, 255),
+    "win_text": (255, 220, 50),
+    "overlay": (0, 0, 0, 180),
     "pause_text": (255, 200, 60),
+    "star": (255, 220, 100),
 }
 
-# Gradient endpoints for numbered tiles
-TILE_GRAD_A = (60, 85, 165)
-TILE_GRAD_B = (130, 80, 200)
+# Richer gradient endpoints for numbered tiles
+TILE_GRAD_A = (50, 80, 180)
+TILE_GRAD_B = (150, 60, 220)
+TILE_GRAD_C = (80, 200, 160)  # Third gradient point for more variety
+
+
+# ======================================================================
+# Particle system for visual flair
+# ======================================================================
+class Particle:
+    """A single floating particle for ambient background effects."""
+
+    def __init__(self, x, y, vx, vy, size, color, life):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.size = size
+        self.color = color
+        self.life = life
+        self.max_life = life
+
+    def update(self, dt):
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.life -= dt
+
+    def draw(self, surface):
+        alpha = max(0, min(255, int(255 * (self.life / self.max_life))))
+        if alpha < 10:
+            return
+        s = max(1, int(self.size * (self.life / self.max_life)))
+        surf = pygame.Surface((s * 2, s * 2), pygame.SRCALPHA)
+        pygame.draw.circle(
+            surf, (*self.color, alpha), (s, s), s
+        )
+        surface.blit(surf, (int(self.x) - s, int(self.y) - s))
+
+
+class ParticleSystem:
+    """Manages a collection of ambient particles."""
+
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.particles: list[Particle] = []
+        self._spawn_timer = 0.0
+        # Pre-spawn some particles
+        for _ in range(15):
+            self._spawn_ambient()
+
+    def _spawn_ambient(self):
+        """Spawn a gentle floating particle."""
+        x = random.uniform(0, self.width)
+        y = random.uniform(0, self.height)
+        vx = random.uniform(-8, 8)
+        vy = random.uniform(-12, -3)
+        size = random.uniform(1.5, 4)
+        colors = [
+            (100, 140, 255), (150, 100, 255), (80, 200, 180),
+            (200, 120, 255), (120, 180, 255),
+        ]
+        color = random.choice(colors)
+        life = random.uniform(4, 10)
+        self.particles.append(Particle(x, y, vx, vy, size, color, life))
+
+    def spawn_burst(self, x, y, count=30):
+        """Spawn a celebratory burst of particles at (x, y)."""
+        for _ in range(count):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(40, 180)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            size = random.uniform(2, 6)
+            colors = [
+                (255, 220, 50), (255, 150, 50), (100, 255, 150),
+                (100, 180, 255), (255, 100, 150), (200, 120, 255),
+            ]
+            color = random.choice(colors)
+            life = random.uniform(1.0, 2.5)
+            self.particles.append(Particle(x, y, vx, vy, size, color, life))
+
+    def update(self, dt):
+        self._spawn_timer += dt
+        if self._spawn_timer > 0.4:
+            self._spawn_timer = 0
+            self._spawn_ambient()
+
+        for p in self.particles:
+            p.update(dt)
+        self.particles = [p for p in self.particles if p.life > 0]
+
+    def draw(self, surface):
+        for p in self.particles:
+            p.draw(surface)
 
 
 # ======================================================================
@@ -43,7 +143,7 @@ TILE_GRAD_B = (130, 80, 200)
 class TileAnimation:
     """Smooth ease-out slide animation for a single tile."""
 
-    def __init__(self, tile_value, from_px, to_px, duration=0.12):
+    def __init__(self, tile_value, from_px, to_px, duration=0.14):
         self.tile_value = tile_value
         self.from_px = from_px       # (x, y) pixel start
         self.to_px = to_px           # (x, y) pixel end
@@ -71,14 +171,14 @@ class TileAnimation:
 # Renderer
 # ======================================================================
 class Renderer:
-    """Main renderer for the sliding puzzle game."""
+    """Main renderer for the sliding puzzle game with premium visuals."""
 
     # Layout constants
     WIN_W = 620
     HUD_H = 120
     PAD = 10
-    GAP = 4
-    RADIUS = 10
+    GAP = 5
+    RADIUS = 12
 
     def __init__(self, screen):
         self.screen = screen
@@ -86,7 +186,11 @@ class Renderer:
         self.hover_tile = None          # (row, col) under mouse
         self.puzzle_image = None        # loaded pygame.Surface
         self.tile_surfaces: dict = {}   # {tile_value: Surface}
+        self.particles = ParticleSystem(self.WIN_W, self.WIN_W + self.HUD_H)
+        self._time = 0.0               # Global clock for animated effects
+        self._bg_surface = None         # Cached gradient background
         self._init_fonts()
+        self._create_bg_gradient()
 
     # ------------------------------------------------------------------
     # Font setup
@@ -99,6 +203,7 @@ class Renderer:
         self.font_tile = pygame.font.Font(None, 64)
         self.font_tile_sm = pygame.font.Font(None, 46)
         self.font_hud = pygame.font.Font(None, 26)
+        self.font_tiny = pygame.font.Font(None, 20)
 
         # Attempt to use Segoe UI (Windows) for a modern look
         for path in (
@@ -107,19 +212,41 @@ class Renderer:
         ):
             if os.path.exists(path):
                 try:
-                    self.font_large = pygame.font.Font(path, 56)
-                    self.font_medium = pygame.font.Font(path, 36)
-                    self.font_small = pygame.font.Font(path, 24)
-                    self.font_hud = pygame.font.Font(path, 21)
+                    self.font_large = pygame.font.Font(path, 52)
+                    self.font_medium = pygame.font.Font(path, 34)
+                    self.font_small = pygame.font.Font(path, 22)
+                    self.font_hud = pygame.font.Font(path, 19)
+                    self.font_tiny = pygame.font.Font(path, 15)
                     bold = path.replace("segoeui", "segoeuib").replace(
                         "arial", "arialbd"
                     )
                     tf = bold if os.path.exists(bold) else path
-                    self.font_tile = pygame.font.Font(tf, 50)
-                    self.font_tile_sm = pygame.font.Font(tf, 36)
+                    self.font_tile = pygame.font.Font(tf, 48)
+                    self.font_tile_sm = pygame.font.Font(tf, 34)
                 except Exception:
                     pass
                 break
+
+    # ------------------------------------------------------------------
+    # Background gradient
+    # ------------------------------------------------------------------
+    def _create_bg_gradient(self):
+        """Create a cached vertical gradient background surface."""
+        h = self.WIN_W + self.HUD_H
+        self._bg_surface = pygame.Surface((self.WIN_W, h))
+        top = COLORS["bg_top"]
+        bot = COLORS["bg_bottom"]
+        for y in range(h):
+            t = y / h
+            r = int(top[0] + (bot[0] - top[0]) * t)
+            g = int(top[1] + (bot[1] - top[1]) * t)
+            b = int(top[2] + (bot[2] - top[2]) * t)
+            pygame.draw.line(self._bg_surface, (r, g, b), (0, y), (self.WIN_W, y))
+
+    def draw_background(self):
+        """Draw the gradient background with particles."""
+        self.screen.blit(self._bg_surface, (0, 0))
+        self.particles.draw(self.screen)
 
     # ------------------------------------------------------------------
     # Geometry helpers
@@ -143,7 +270,7 @@ class Renderer:
         return (br.width - (size + 1) * self.GAP) / size
 
     def pixel_to_grid(self, px, py, size):
-        """Convert pixel (px, py) → grid (row, col) or ``None``."""
+        """Convert pixel (px, py) -> grid (row, col) or ``None``."""
         br = self.board_rect(size)
         if not br.collidepoint(px, py):
             return None
@@ -182,7 +309,7 @@ class Renderer:
     # Animation management
     # ------------------------------------------------------------------
     def start_animation(self, value, fr, fc, tr, tc, size):
-        """Queue a slide animation from grid (fr,fc) → (tr,tc)."""
+        """Queue a slide animation from grid (fr,fc) -> (tr,tc)."""
         src = self.tile_rect(fr, fc, size)
         dst = self.tile_rect(tr, tc, size)
         self.animations.append(
@@ -191,6 +318,8 @@ class Renderer:
 
     def update_animations(self, dt):
         """Tick all animations, removing finished ones."""
+        self._time += dt
+        self.particles.update(dt)
         for a in self.animations:
             a.update(dt)
         self.animations = [a for a in self.animations if not a.done]
@@ -203,20 +332,40 @@ class Renderer:
     # ------------------------------------------------------------------
     @staticmethod
     def _tile_color(value, total):
-        """Gradient colour based on tile number."""
+        """Rich multi-point gradient colour based on tile number."""
         t = value / max(total - 1, 1)
-        return tuple(
-            int(TILE_GRAD_A[i] + (TILE_GRAD_B[i] - TILE_GRAD_A[i]) * t)
-            for i in range(3)
-        )
+        if t < 0.5:
+            t2 = t * 2
+            return tuple(
+                int(TILE_GRAD_A[i] + (TILE_GRAD_B[i] - TILE_GRAD_A[i]) * t2)
+                for i in range(3)
+            )
+        else:
+            t2 = (t - 0.5) * 2
+            return tuple(
+                int(TILE_GRAD_B[i] + (TILE_GRAD_C[i] - TILE_GRAD_B[i]) * t2)
+                for i in range(3)
+            )
 
     def _draw_tile(self, rect, value, size, correct, hover, image_mode):
-        """Render a single tile (numbered or image)."""
+        """Render a single tile with enhanced visuals."""
         if value == 0:
-            # Empty cell — faint indication
-            pygame.draw.rect(
-                self.screen, COLORS["empty"], rect, border_radius=self.RADIUS
+            # Empty cell with subtle inner shadow
+            empty_surf = pygame.Surface(
+                (int(rect.width), int(rect.height)), pygame.SRCALPHA
             )
+            pygame.draw.rect(
+                empty_surf, (*COLORS["empty"], 180),
+                pygame.Rect(0, 0, int(rect.width), int(rect.height)),
+                border_radius=self.RADIUS,
+            )
+            # Inner shadow top-left
+            pygame.draw.rect(
+                empty_surf, (0, 0, 0, 30),
+                pygame.Rect(2, 2, int(rect.width) - 4, int(rect.height) - 4),
+                border_radius=self.RADIUS - 2,
+            )
+            self.screen.blit(empty_surf, rect.topleft)
             return
 
         if image_mode and value in self.tile_surfaces:
@@ -224,52 +373,120 @@ class Renderer:
             scaled = pygame.transform.smoothscale(
                 surf, (int(rect.width), int(rect.height))
             )
+            # Draw with a subtle border
+            border_rect = rect.inflate(2, 2)
+            pygame.draw.rect(
+                self.screen, (40, 40, 60),
+                border_rect, border_radius=self.RADIUS,
+            )
             self.screen.blit(scaled, rect.topleft)
+
             # Correct-position tint
             if correct:
                 ov = pygame.Surface(
                     (int(rect.width), int(rect.height)), pygame.SRCALPHA
                 )
-                ov.fill((40, 200, 80, 50))
+                ov.fill((40, 220, 80, 45))
                 self.screen.blit(ov, rect.topleft)
-            # Hover border
+                pygame.draw.rect(
+                    self.screen, (40, 220, 80, 180), rect,
+                    2, border_radius=self.RADIUS,
+                )
+            # Hover glow
             if hover:
                 pygame.draw.rect(
-                    self.screen,
-                    (255, 255, 255),
-                    rect,
-                    3,
-                    border_radius=self.RADIUS,
+                    self.screen, (180, 200, 255),
+                    rect, 3, border_radius=self.RADIUS,
                 )
+                # Outer glow
+                glow_rect = rect.inflate(6, 6)
+                glow_surf = pygame.Surface(
+                    (glow_rect.width, glow_rect.height), pygame.SRCALPHA
+                )
+                pygame.draw.rect(
+                    glow_surf, (100, 140, 255, 30),
+                    pygame.Rect(0, 0, glow_rect.width, glow_rect.height),
+                    border_radius=self.RADIUS + 3,
+                )
+                self.screen.blit(glow_surf, glow_rect.topleft)
             return
 
-        # --- Numbered tile ---
+        # --- Numbered tile with premium look ---
         total = size * size
-        base = (
-            COLORS["tile_correct"]
-            if correct
-            else (COLORS["tile_hover"] if hover else self._tile_color(value, total))
+
+        if correct:
+            base = COLORS["tile_correct"]
+        elif hover:
+            base = COLORS["tile_hover"]
+        else:
+            base = self._tile_color(value, total)
+
+        tile_surf = pygame.Surface(
+            (int(rect.width), int(rect.height) + 4), pygame.SRCALPHA
         )
 
-        # Shadow
-        shadow = pygame.Rect(rect.x, rect.y + 3, rect.width, rect.height)
-        shadow_c = tuple(max(0, c - 40) for c in base)
+        # Shadow (offset below)
+        shadow_c = tuple(max(0, c - 50) for c in base)
         pygame.draw.rect(
-            self.screen, shadow_c, shadow, border_radius=self.RADIUS
+            tile_surf, (*shadow_c, 120),
+            pygame.Rect(0, 4, int(rect.width), int(rect.height)),
+            border_radius=self.RADIUS,
         )
 
         # Main body
         pygame.draw.rect(
-            self.screen, base, rect, border_radius=self.RADIUS
+            tile_surf, base,
+            pygame.Rect(0, 0, int(rect.width), int(rect.height)),
+            border_radius=self.RADIUS,
         )
 
-        # Top highlight band
-        hl = pygame.Surface((rect.width - 4, rect.height // 3), pygame.SRCALPHA)
-        hl.fill((*[min(255, c + 35) for c in base], 45))
-        self.screen.blit(hl, (rect.x + 2, rect.y + 2))
+        # Top highlight gradient (glassmorphism feel)
+        hl_h = int(rect.height * 0.4)
+        hl = pygame.Surface((int(rect.width) - 6, hl_h), pygame.SRCALPHA)
+        for y in range(hl_h):
+            alpha = int(50 * (1 - y / hl_h))
+            pygame.draw.line(hl, (255, 255, 255, alpha), (0, y), (int(rect.width) - 6, y))
+        tile_surf.blit(hl, (3, 3))
 
-        # Number label
+        # Bottom edge darker line
+        pygame.draw.rect(
+            tile_surf, (*[max(0, c - 30) for c in base], 80),
+            pygame.Rect(3, int(rect.height) - 3, int(rect.width) - 6, 3),
+            border_radius=2,
+        )
+
+        self.screen.blit(tile_surf, rect.topleft)
+
+        # Hover glow ring
+        if hover:
+            glow_rect = rect.inflate(6, 6)
+            glow_surf = pygame.Surface(
+                (glow_rect.width, glow_rect.height), pygame.SRCALPHA
+            )
+            pygame.draw.rect(
+                glow_surf, (120, 160, 255, 40),
+                pygame.Rect(0, 0, glow_rect.width, glow_rect.height),
+                border_radius=self.RADIUS + 3,
+            )
+            self.screen.blit(glow_surf, glow_rect.topleft)
+
+        # Correct position subtle check indicator
+        if correct:
+            check_surf = pygame.Surface((20, 20), pygame.SRCALPHA)
+            pygame.draw.circle(check_surf, (40, 220, 80, 200), (10, 10), 8)
+            pygame.draw.circle(check_surf, (255, 255, 255, 220), (10, 10), 5)
+            self.screen.blit(check_surf, (rect.right - 18, rect.top + 4))
+
+        # Number label with subtle shadow
         font = self.font_tile if size <= 3 else self.font_tile_sm
+        # Text shadow
+        txt_shadow = font.render(str(value), True, (0, 0, 0))
+        txt_shadow.set_alpha(80)
+        self.screen.blit(
+            txt_shadow,
+            txt_shadow.get_rect(center=(rect.centerx + 1, rect.centery + 2)),
+        )
+        # Main text
         txt = font.render(str(value), True, COLORS["tile_text"])
         self.screen.blit(txt, txt.get_rect(center=rect.center))
 
@@ -277,11 +494,37 @@ class Renderer:
     # Full board drawing
     # ------------------------------------------------------------------
     def draw_board(self, board, image_mode=False):
-        """Draw the grid background and all tiles (including animations)."""
+        """Draw the grid background and all tiles with enhanced visuals."""
         size = board.size
         br = self.board_rect(size)
+
+        # Board background with subtle border glow
+        board_glow = br.inflate(6, 6)
+        glow_surf = pygame.Surface(
+            (board_glow.width, board_glow.height), pygame.SRCALPHA
+        )
+        # Animated glow intensity
+        glow_alpha = int(20 + 10 * math.sin(self._time * 1.5))
         pygame.draw.rect(
-            self.screen, COLORS["board_bg"], br, border_radius=12
+            glow_surf,
+            (*COLORS["board_border"], glow_alpha),
+            pygame.Rect(0, 0, board_glow.width, board_glow.height),
+            border_radius=15,
+        )
+        self.screen.blit(glow_surf, board_glow.topleft)
+
+        # Main board background
+        board_surf = pygame.Surface((br.width, br.height), pygame.SRCALPHA)
+        pygame.draw.rect(
+            board_surf, (*COLORS["board_bg"], 230),
+            pygame.Rect(0, 0, br.width, br.height),
+            border_radius=14,
+        )
+        self.screen.blit(board_surf, br.topleft)
+
+        # Subtle border
+        pygame.draw.rect(
+            self.screen, COLORS["board_border"], br, 1, border_radius=14
         )
 
         animating = {a.tile_value for a in self.animations}
@@ -290,20 +533,21 @@ class Renderer:
             for c in range(size):
                 val = board.get_tile_value(r, c)
                 if val in animating:
-                    # Placeholder empty cell while tile animates
                     tr = self.tile_rect(r, c, size)
+                    # Show empty placeholder
+                    empty_s = pygame.Surface(
+                        (int(tr.width), int(tr.height)), pygame.SRCALPHA
+                    )
                     pygame.draw.rect(
-                        self.screen,
-                        COLORS["empty"],
-                        tr,
+                        empty_s, (*COLORS["empty"], 120),
+                        pygame.Rect(0, 0, int(tr.width), int(tr.height)),
                         border_radius=self.RADIUS,
                     )
+                    self.screen.blit(empty_s, tr.topleft)
                     continue
                 tr = self.tile_rect(r, c, size)
                 self._draw_tile(
-                    tr,
-                    val,
-                    size,
+                    tr, val, size,
                     board.is_tile_in_correct_position(r, c),
                     self.hover_tile == (r, c) and val != 0,
                     image_mode,
@@ -317,69 +561,89 @@ class Renderer:
             self._draw_tile(ar, a.tile_value, size, False, False, image_mode)
 
     # ------------------------------------------------------------------
-    # HUD (heads-up display)
+    # HUD (heads-up display) — glassmorphism style
     # ------------------------------------------------------------------
-    def draw_hud(self, board, image_mode=False):
-        """Draw the top bar: title, move counter, timer, control hints."""
-        hud = pygame.Rect(0, 0, self.WIN_W, self.HUD_H)
-        pygame.draw.rect(self.screen, COLORS["hud_bg"], hud)
-        pygame.draw.line(
-            self.screen,
-            COLORS["hud_accent"],
-            (0, self.HUD_H - 1),
-            (self.WIN_W, self.HUD_H - 1),
-            2,
-        )
+    def draw_hud(self, board, image_mode=False, image_name=""):
+        """Draw the top bar with glassmorphism effect."""
+        # Semi-transparent HUD background
+        hud_surf = pygame.Surface((self.WIN_W, self.HUD_H), pygame.SRCALPHA)
+        hud_surf.fill((15, 15, 28, 210))
+        self.screen.blit(hud_surf, (0, 0))
+
+        # Accent line at bottom of HUD
+        for x in range(self.WIN_W):
+            t = x / self.WIN_W
+            r = int(80 + 60 * t)
+            g = int(120 + 40 * (1 - t))
+            b = 255
+            pygame.draw.line(
+                self.screen, (r, g, b),
+                (x, self.HUD_H - 2), (x, self.HUD_H),
+            )
 
         # Title
         title = self.font_medium.render("Sliding Puzzle", True, COLORS["title"])
-        self.screen.blit(title, (20, 10))
+        self.screen.blit(title, (18, 8))
 
-        # Size & mode badges
-        badge = self.font_hud.render(
-            f"{board.size}×{board.size}  •  {'Image' if image_mode else 'Numbers'}",
-            True,
-            COLORS["hud_text"],
+        # Size & mode badges with pill styling
+        badge_text = f"{board.size}x{board.size}"
+        self._draw_pill(18 + title.get_width() + 10, 12, badge_text, COLORS["hud_accent"])
+
+        mode_label = image_name if image_mode and image_name else ("Image" if image_mode else "Numbers")
+        self._draw_pill(
+            18 + title.get_width() + 65, 12,
+            mode_label,
+            COLORS["hud_accent2"] if image_mode else (100, 120, 150),
         )
-        self.screen.blit(badge, (20 + title.get_width() + 12, 18))
 
-        # Moves
-        self._hud_stat("Moves", str(board.move_count), 20, 55)
-
-        # Timer
+        # Stats row
+        self._hud_stat("MOVES", str(board.move_count), 18, 52)
         elapsed = board.get_elapsed_time()
         m, s = divmod(int(elapsed), 60)
-        self._hud_stat("Time", f"{m:02d}:{s:02d}", 150, 55)
+        self._hud_stat("TIME", f"{m:02d}:{s:02d}", 130, 52)
 
-        # Best score
         if board.best_moves is not None:
             bm, bs = board.best_moves, int(board.best_time or 0)
             bmin, bsec = divmod(bs, 60)
-            self._hud_stat("Best", f"{bm} / {bmin:02d}:{bsec:02d}", 280, 55)
+            self._hud_stat("BEST", f"{bm} / {bmin:02d}:{bsec:02d}", 240, 52)
 
         # Control hints
         hints = "[R] Restart  [U] Undo  [P] Pause  [M] Menu"
-        ht = self.font_hud.render(hints, True, (80, 80, 100))
-        self.screen.blit(ht, (self.WIN_W - ht.get_width() - 12, 92))
+        ht = self.font_tiny.render(hints, True, (70, 75, 100))
+        self.screen.blit(ht, (self.WIN_W - ht.get_width() - 12, 96))
 
         # Pause indicator
         if board.paused:
             pt = self.font_medium.render(
-                "⏸  PAUSED", True, COLORS["pause_text"]
+                "PAUSED", True, COLORS["pause_text"]
             )
             self.screen.blit(
                 pt, (self.WIN_W - pt.get_width() - 12, 50)
             )
 
+    def _draw_pill(self, x, y, text, color):
+        """Draw a small pill-shaped badge."""
+        txt = self.font_tiny.render(text, True, (255, 255, 255))
+        pw = txt.get_width() + 16
+        ph = txt.get_height() + 6
+        pill = pygame.Surface((pw, ph), pygame.SRCALPHA)
+        pygame.draw.rect(
+            pill, (*color, 140),
+            pygame.Rect(0, 0, pw, ph),
+            border_radius=ph // 2,
+        )
+        pill.blit(txt, (8, 3))
+        self.screen.blit(pill, (x, y))
+
     def _hud_stat(self, label, value, x, y):
-        """Draw a label/value pair in the HUD."""
-        lt = self.font_hud.render(label, True, COLORS["hud_text"])
+        """Draw a label/value pair in the HUD with styling."""
+        lt = self.font_tiny.render(label, True, (90, 95, 120))
         vt = self.font_medium.render(value, True, COLORS["hud_accent"])
         self.screen.blit(lt, (x, y))
-        self.screen.blit(vt, (x, y + 18))
+        self.screen.blit(vt, (x, y + 16))
 
     # ------------------------------------------------------------------
-    # Win overlay
+    # Win overlay — with particle burst
     # ------------------------------------------------------------------
     def draw_win_screen(self, board):
         """Semi-transparent overlay congratulating the player."""
@@ -390,24 +654,50 @@ class Renderer:
 
         cx, cy = self.WIN_W // 2, win_h // 2
 
+        # Pulsing glow behind title
+        pulse = 0.7 + 0.3 * math.sin(self._time * 3)
+        glow_size = int(250 * pulse)
+        glow_surf = pygame.Surface((glow_size * 2, glow_size), pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            glow_surf, (255, 200, 50, int(25 * pulse)),
+            pygame.Rect(0, 0, glow_size * 2, glow_size),
+        )
+        self.screen.blit(glow_surf, (cx - glow_size, cy - 90))
+
         # Title
         txt = self.font_large.render("Puzzle Solved!", True, COLORS["win_text"])
+        # Shadow
+        txt_s = self.font_large.render("Puzzle Solved!", True, (100, 80, 0))
+        txt_s.set_alpha(60)
+        self.screen.blit(txt_s, txt_s.get_rect(center=(cx + 2, cy - 58)))
         self.screen.blit(txt, txt.get_rect(center=(cx, cy - 60)))
 
-        # Stats
+        # Stats in a glass card
+        card_w, card_h = 340, 50
+        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        pygame.draw.rect(
+            card, (40, 40, 70, 160),
+            pygame.Rect(0, 0, card_w, card_h),
+            border_radius=12,
+        )
+        pygame.draw.rect(
+            card, (100, 140, 255, 60),
+            pygame.Rect(0, 0, card_w, card_h),
+            1, border_radius=12,
+        )
         m, s = divmod(int(board.elapsed_time), 60)
         stat = self.font_medium.render(
             f"Moves: {board.move_count}   Time: {m:02d}:{s:02d}",
-            True,
-            COLORS["hud_text"],
+            True, COLORS["hud_text"],
         )
-        self.screen.blit(stat, stat.get_rect(center=(cx, cy)))
+        card.blit(stat, stat.get_rect(center=(card_w // 2, card_h // 2)))
+        self.screen.blit(card, (cx - card_w // 2, cy - 10))
 
         # Instructions
         inst = self.font_small.render(
-            "Press [R] to play again  •  [M] for menu", True, COLORS["hud_text"]
+            "Press [R] to play again  |  [M] for menu", True, (140, 145, 170)
         )
-        self.screen.blit(inst, inst.get_rect(center=(cx, cy + 50)))
+        self.screen.blit(inst, inst.get_rect(center=(cx, cy + 55)))
 
     # ------------------------------------------------------------------
     # Pause overlay
@@ -416,12 +706,24 @@ class Renderer:
         """Draw a translucent overlay when the game is paused."""
         win_h = self.WIN_W + self.HUD_H
         overlay = pygame.Surface((self.WIN_W, win_h), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 140))
+        overlay.fill((0, 0, 0, 150))
         self.screen.blit(overlay, (0, 0))
 
-        txt = self.font_large.render("PAUSED", True, COLORS["pause_text"])
         cx, cy = self.WIN_W // 2, win_h // 2
-        self.screen.blit(txt, txt.get_rect(center=(cx, cy)))
+
+        # Pause icon (two bars)
+        bar_w, bar_h = 14, 50
+        gap = 12
+        pygame.draw.rect(
+            self.screen, COLORS["pause_text"],
+            pygame.Rect(cx - gap - bar_w, cy - bar_h // 2, bar_w, bar_h),
+            border_radius=4,
+        )
+        pygame.draw.rect(
+            self.screen, COLORS["pause_text"],
+            pygame.Rect(cx + gap, cy - bar_h // 2, bar_w, bar_h),
+            border_radius=4,
+        )
 
         sub = self.font_small.render(
             "Press [P] to resume", True, COLORS["hud_text"]
@@ -429,94 +731,150 @@ class Renderer:
         self.screen.blit(sub, sub.get_rect(center=(cx, cy + 50)))
 
     # ------------------------------------------------------------------
-    # Main menu
+    # Main menu — premium styling
     # ------------------------------------------------------------------
-    def draw_menu(self, selected_size=3, image_mode=False):
+    def draw_menu(self, selected_size=3, image_mode=False, image_name="",
+                  image_count=1, image_idx=0):
         """
         Draw the main menu and return a list of ``(Rect, action_str)``
         tuples for click detection.
         """
-        self.screen.fill(COLORS["bg"])
+        self.draw_background()
         cx = self.WIN_W // 2
 
-        # Title
+        # Animated title glow
+        glow_alpha = int(15 + 8 * math.sin(self._time * 2))
         title = self.font_large.render("Sliding Puzzle", True, COLORS["title"])
-        tr = title.get_rect(center=(cx, 90))
-        # Glow
+        tr = title.get_rect(center=(cx, 80))
         glow = pygame.Surface(
-            (title.get_width() + 60, title.get_height() + 30), pygame.SRCALPHA
+            (title.get_width() + 80, title.get_height() + 40), pygame.SRCALPHA
         )
-        glow.fill((*COLORS["title"], 18))
-        self.screen.blit(glow, (tr.x - 30, tr.y - 15))
+        glow.fill((*COLORS["title_glow"], glow_alpha))
+        self.screen.blit(glow, (tr.x - 40, tr.y - 20))
+        # Title shadow
+        title_s = self.font_large.render("Sliding Puzzle", True, (20, 30, 60))
+        title_s.set_alpha(80)
+        self.screen.blit(title_s, (tr.x + 2, tr.y + 2))
         self.screen.blit(title, tr)
 
+        # Subtitle
         sub = self.font_small.render(
-            "A Classic Logic Puzzle Game", True, COLORS["hud_text"]
+            "A Classic Logic Puzzle Game", True, (120, 125, 155)
         )
-        self.screen.blit(sub, sub.get_rect(center=(cx, 145)))
+        self.screen.blit(sub, sub.get_rect(center=(cx, 130)))
 
-        # Buttons
+        # Decorative line
+        line_surf = pygame.Surface((200, 2), pygame.SRCALPHA)
+        for x in range(200):
+            t = x / 200
+            a = int(60 * math.sin(t * math.pi))
+            pygame.draw.line(line_surf, (100, 140, 255, a), (x, 0), (x, 1))
+        self.screen.blit(line_surf, (cx - 100, 148))
+
+        # Menu buttons
+        img_label = image_name if image_mode and image_name else "Numbers"
         items = [
             ("New Game", "new_game"),
-            (f"Grid Size: {selected_size}×{selected_size}", "grid_size"),
-            (f"Mode: {'Image' if image_mode else 'Numbers'}", "tile_mode"),
-            ("Auto Solve (3×3 only)", "auto_solve"),
-            ("Quit", "quit"),
+            (f"Grid: {selected_size}x{selected_size}", "grid_size"),
+            (f"Mode: {img_label}", "tile_mode"),
         ]
-        bw, bh, spacing = 320, 55, 68
-        start_y = 210
+        if image_mode and image_count > 1:
+            items.append((f"Image: {image_idx + 1}/{image_count} (click to change)", "change_image"))
+        items.extend([
+            ("Auto Solve (3x3)", "auto_solve"),
+            ("Quit", "quit"),
+        ])
+
+        bw, bh, spacing = 340, 50, 60
+        start_y = 175
         mouse = pygame.mouse.get_pos()
         buttons = []
 
         for i, (label, action) in enumerate(items):
             rect = pygame.Rect(cx - bw // 2, start_y + i * spacing, bw, bh)
             hov = rect.collidepoint(mouse)
-            col = COLORS["button_hover"] if hov else COLORS["button"]
-            pygame.draw.rect(self.screen, col, rect, border_radius=10)
+
+            # Button with gradient border
+            btn_surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
+            bg_color = COLORS["button_hover"] if hov else COLORS["button"]
+            pygame.draw.rect(
+                btn_surf, (*bg_color, 200),
+                pygame.Rect(0, 0, bw, bh),
+                border_radius=12,
+            )
             if hov:
+                # Glow border
                 pygame.draw.rect(
-                    self.screen, COLORS["hud_accent"], rect, 2, border_radius=10
+                    btn_surf, (*COLORS["button_border"], 180),
+                    pygame.Rect(0, 0, bw, bh),
+                    2, border_radius=12,
                 )
+                # Top highlight
+                hl = pygame.Surface((bw - 8, bh // 3), pygame.SRCALPHA)
+                hl.fill((255, 255, 255, 15))
+                btn_surf.blit(hl, (4, 2))
+            else:
+                pygame.draw.rect(
+                    btn_surf, (60, 70, 120, 80),
+                    pygame.Rect(0, 0, bw, bh),
+                    1, border_radius=12,
+                )
+
             txt = self.font_small.render(label, True, COLORS["button_text"])
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            btn_surf.blit(txt, txt.get_rect(center=(bw // 2, bh // 2)))
+            self.screen.blit(btn_surf, rect.topleft)
             buttons.append((rect, action))
 
         # Footer
-        ft = self.font_hud.render(
-            "CSE444 — Vibe Coding Project", True, (60, 60, 80)
+        ft = self.font_tiny.render(
+            "CSE444 - Vibe Coding Project", True, (50, 50, 70)
         )
         self.screen.blit(
-            ft, ft.get_rect(center=(cx, self.WIN_W + self.HUD_H - 28))
+            ft, ft.get_rect(center=(cx, self.WIN_W + self.HUD_H - 25))
         )
         return buttons
 
     # ------------------------------------------------------------------
-    # Goal-state preview (small)
+    # Goal-state preview (small) — improved mini tiles
     # ------------------------------------------------------------------
     def draw_goal_preview(self, board, x, y, preview_size=100):
         """Draw a miniature view of the goal (solved) state."""
         size = board.size
         ts = preview_size // size
 
-        bg = pygame.Rect(x - 2, y - 2, preview_size + 4, preview_size + 4)
-        pygame.draw.rect(self.screen, COLORS["board_bg"], bg, border_radius=6)
+        # Glass card background
+        card = pygame.Surface(
+            (preview_size + 8, preview_size + 28), pygame.SRCALPHA
+        )
+        pygame.draw.rect(
+            card, (25, 25, 45, 180),
+            pygame.Rect(0, 0, preview_size + 8, preview_size + 28),
+            border_radius=8,
+        )
+        pygame.draw.rect(
+            card, (60, 70, 120, 60),
+            pygame.Rect(0, 0, preview_size + 8, preview_size + 28),
+            1, border_radius=8,
+        )
+        self.screen.blit(card, (x - 4, y - 24))
 
-        lbl = self.font_hud.render("Goal", True, COLORS["hud_text"])
-        self.screen.blit(lbl, (x, y - 20))
+        # Label
+        lbl = self.font_tiny.render("GOAL", True, (100, 110, 140))
+        self.screen.blit(lbl, (x, y - 18))
 
         total = size * size
         for r in range(size):
             for c in range(size):
                 val = board.goal[r][c]
-                tr = pygame.Rect(x + c * ts, y + r * ts, ts - 1, ts - 1)
+                tr = pygame.Rect(x + c * ts, y + r * ts, ts - 2, ts - 2)
                 if val == 0:
                     pygame.draw.rect(
                         self.screen, COLORS["empty"], tr, border_radius=3
                     )
                 else:
                     clr = self._tile_color(val, total)
-                    pygame.draw.rect(self.screen, clr, tr, border_radius=3)
+                    pygame.draw.rect(self.screen, clr, tr, border_radius=4)
                     if size <= 4:
-                        ft = pygame.font.Font(None, max(14, 54 // size))
+                        ft = pygame.font.Font(None, max(14, 50 // size))
                         t = ft.render(str(val), True, COLORS["tile_text"])
                         self.screen.blit(t, t.get_rect(center=tr.center))

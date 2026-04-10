@@ -1,16 +1,17 @@
 """
-Sliding Puzzle Game — Main Entry Point
+Sliding Puzzle Game -- Main Entry Point
 
 A classic logic-based sliding puzzle built with Python and PyGame.
-Supports 3×3 and 4×4 grids, numbered and image tile modes,
-smooth animations, undo, pause, timer, and an A* auto-solver
-demo for 3×3 puzzles.
+Supports 3x3 and 4x4 grids, numbered and image tile modes (with
+multiple selectable images), smooth animations, undo, pause, timer,
+and an A* auto-solver demo for 3x3 puzzles.
 
-CSE444 — Vibe Coding Project
+CSE444 -- Vibe Coding Project
 """
 
 import sys
 import os
+import glob
 import pygame
 
 from game import Board
@@ -21,11 +22,11 @@ from solver import solve_astar
 # Constants
 # ======================================================================
 FPS = 60
-WINDOW_TITLE = "Sliding Puzzle Game — CSE444"
+WINDOW_TITLE = "Sliding Puzzle Game"
 DEFAULT_SIZE = 3
-IMAGE_PATH = os.path.join(
+IMAGES_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "assets", "images", "puzzle_default.png",
+    "assets", "images",
 )
 
 # Game states
@@ -35,7 +36,27 @@ STATE_WON = "won"
 
 
 # ======================================================================
-# Sound helpers (procedural — no external files needed)
+# Image discovery
+# ======================================================================
+def discover_images(directory):
+    """
+    Scan the images directory and return a list of
+    (display_name, full_path) tuples.
+    """
+    images = []
+    if not os.path.isdir(directory):
+        return images
+    for ext in ("*.png", "*.jpg", "*.jpeg", "*.bmp"):
+        for path in sorted(glob.glob(os.path.join(directory, ext))):
+            name = os.path.splitext(os.path.basename(path))[0]
+            # Clean up name for display: puzzle_city -> City
+            display = name.replace("puzzle_", "").replace("_", " ").title()
+            images.append((display, path))
+    return images
+
+
+# ======================================================================
+# Sound helpers (procedural -- no external files needed)
 # ======================================================================
 def _make_beep(frequency=440, duration_ms=80, volume=0.15):
     """Generate a short sine-wave beep as a pygame Sound object."""
@@ -49,12 +70,39 @@ def _make_beep(frequency=440, duration_ms=80, volume=0.15):
         for i in range(n_samples):
             t = i / sample_rate
             val = int(32767 * volume * _math.sin(2 * _math.pi * frequency * t))
-            # Fade out last 20 %
+            # Fade out last 20%
             if i > n_samples * 0.8:
                 val = int(val * (n_samples - i) / (n_samples * 0.2))
             buf[i] = val
         snd = pygame.mixer.Sound(buffer=buf)
         return snd
+    except Exception:
+        return None
+
+
+def _make_win_sound():
+    """Generate a pleasant two-tone win chime."""
+    try:
+        import array
+        import math as _math
+
+        sample_rate = 22050
+        duration_ms = 500
+        n_samples = int(sample_rate * duration_ms / 1000)
+        buf = array.array("h", [0] * n_samples)
+        for i in range(n_samples):
+            t = i / sample_rate
+            # Two harmonics for a richer sound
+            val = (
+                0.12 * _math.sin(2 * _math.pi * 660 * t)
+                + 0.08 * _math.sin(2 * _math.pi * 880 * t)
+                + 0.05 * _math.sin(2 * _math.pi * 1320 * t)
+            )
+            # Envelope: attack + decay
+            env = min(1.0, i / (sample_rate * 0.02))  # 20ms attack
+            env *= max(0, 1 - (i / n_samples) ** 0.5)  # decay
+            buf[i] = int(32767 * val * env)
+        return pygame.mixer.Sound(buffer=buf)
     except Exception:
         return None
 
@@ -82,20 +130,55 @@ class SlidingPuzzleApp:
         self.image_mode = False
         self.menu_buttons = []
 
+        # Multi-image support
+        self.available_images = discover_images(IMAGES_DIR)
+        self.current_image_idx = 0
+
         # Auto-solve state
         self.auto_solving = False
         self.auto_solve_moves = []
         self.auto_solve_timer = 0.0
-        self.auto_solve_delay = 0.35  # seconds between moves
+        self.auto_solve_delay = 0.30  # seconds between moves
+
+        # Win celebration state
+        self._win_particles_spawned = False
 
         # Sounds
-        self.snd_slide = _make_beep(500, 60, 0.10)
-        self.snd_win = _make_beep(880, 300, 0.18)
-        self.snd_click = _make_beep(600, 40, 0.08)
+        self.snd_slide = _make_beep(520, 50, 0.08)
+        self.snd_win = _make_win_sound()
+        self.snd_click = _make_beep(650, 35, 0.06)
 
-        # Load image for image mode
-        if os.path.exists(IMAGE_PATH):
-            self.renderer.load_puzzle_image(IMAGE_PATH, self.selected_size)
+        # Pre-load first image
+        self._load_current_image()
+
+    # ------------------------------------------------------------------
+    # Image management
+    # ------------------------------------------------------------------
+    def _current_image_path(self):
+        """Get the path of the currently selected image."""
+        if self.available_images:
+            return self.available_images[self.current_image_idx][1]
+        return None
+
+    def _current_image_name(self):
+        """Get the display name of the currently selected image."""
+        if self.available_images:
+            return self.available_images[self.current_image_idx][0]
+        return ""
+
+    def _load_current_image(self):
+        """Load the currently selected image into the renderer."""
+        path = self._current_image_path()
+        if path and os.path.exists(path):
+            self.renderer.load_puzzle_image(path, self.selected_size)
+
+    def _cycle_image(self):
+        """Cycle to the next available image."""
+        if self.available_images:
+            self.current_image_idx = (
+                (self.current_image_idx + 1) % len(self.available_images)
+            )
+            self._load_current_image()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -114,11 +197,12 @@ class SlidingPuzzleApp:
         self.state = STATE_PLAYING
         self.auto_solving = False
         self.auto_solve_moves = []
-        if self.image_mode and os.path.exists(IMAGE_PATH):
-            self.renderer.load_puzzle_image(IMAGE_PATH, self.selected_size)
+        self._win_particles_spawned = False
+        if self.image_mode:
+            self._load_current_image()
 
     def _toggle_size(self):
-        """Cycle grid size: 3 → 4 → 3."""
+        """Cycle grid size: 3 -> 4 -> 3."""
         self.selected_size = 4 if self.selected_size == 3 else 3
 
     def _do_tile_move(self, row, col):
@@ -154,12 +238,9 @@ class SlidingPuzzleApp:
         """Undo last move with animation."""
         if self.renderer.is_animating():
             return
-        # Before undo, record where the blank currently is
         br, bc = self.board.find_blank()
         ok, from_r, from_c = self.board.undo()
         if ok:
-            # The tile moved from (from_r, from_c) back to its old pos
-            # from_r, from_c is the old blank that now holds the tile
             val = self.board.get_tile_value(from_r, from_c)
             self.renderer.start_animation(
                 val, br, bc, from_r, from_c, self.board.size
@@ -167,7 +248,7 @@ class SlidingPuzzleApp:
             self._play(self.snd_click)
 
     def _start_auto_solve(self):
-        """Begin auto-solve demo (3×3 only)."""
+        """Begin auto-solve demo (3x3 only)."""
         if self.board.size > 3:
             return
         solution = solve_astar(self.board.grid, self.board.size)
@@ -192,6 +273,10 @@ class SlidingPuzzleApp:
                         self._toggle_size()
                     elif action == "tile_mode":
                         self.image_mode = not self.image_mode
+                        if self.image_mode:
+                            self._load_current_image()
+                    elif action == "change_image":
+                        self._cycle_image()
                     elif action == "auto_solve":
                         self._start_new_game()
                         self._start_auto_solve()
@@ -264,7 +349,7 @@ class SlidingPuzzleApp:
     # Update / auto-solve tick
     # ------------------------------------------------------------------
     def _update(self, dt):
-        """Per-frame update logic (animations, auto-solve)."""
+        """Per-frame update logic (animations, auto-solve, particles)."""
         self.renderer.update_animations(dt)
 
         # Auto-solve step
@@ -287,26 +372,42 @@ class SlidingPuzzleApp:
         ):
             self.state = STATE_WON
 
+        # Spawn celebration particles once on win
+        if self.state == STATE_WON and not self._win_particles_spawned:
+            self._win_particles_spawned = True
+            cx = self.win_w // 2
+            cy = self.win_h // 2
+            self.renderer.particles.spawn_burst(cx, cy - 40, count=50)
+            self.renderer.particles.spawn_burst(cx - 80, cy, count=20)
+            self.renderer.particles.spawn_burst(cx + 80, cy, count=20)
+
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
     def _render(self):
         """Draw everything for the current frame."""
-        self.screen.fill(COLORS["bg"])
-
         if self.state == STATE_MENU:
             self.menu_buttons = self.renderer.draw_menu(
-                self.selected_size, self.image_mode
+                self.selected_size,
+                self.image_mode,
+                self._current_image_name(),
+                len(self.available_images),
+                self.current_image_idx,
             )
         elif self.state in (STATE_PLAYING, STATE_WON):
-            self.renderer.draw_hud(self.board, self.image_mode)
+            # Draw gradient background + particles
+            self.renderer.draw_background()
+
+            self.renderer.draw_hud(
+                self.board, self.image_mode, self._current_image_name()
+            )
             self.renderer.draw_board(self.board, self.image_mode)
 
             # Goal preview in top-right
             self.renderer.draw_goal_preview(
                 self.board,
                 self.win_w - 115,
-                self.renderer.HUD_H - 102,
+                self.renderer.HUD_H - 95,
                 preview_size=90,
             )
 
