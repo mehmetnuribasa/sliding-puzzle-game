@@ -138,11 +138,13 @@ def solve_astar(grid, size):
     open_set = [(h, counter, start, [])]
     closed_set = set()
 
+    # Map the visual direction of the *tile* moving.
+    # "up" means tile moves up -> blank moves down (dr=1).
     directions = {
-        "up": (-1, 0),
-        "down": (1, 0),
-        "left": (0, -1),
-        "right": (0, 1),
+        "up": (1, 0),
+        "down": (-1, 0),
+        "left": (0, 1),
+        "right": (0, -1),
     }
 
     while open_set:
