@@ -21,7 +21,8 @@ Coding** take-home exam.
 | **Core**       | Real-time move counter and timer                            |
 | **Core**       | Win detection with congratulations screen                   |
 | **Modes**      | Numbered tiles mode                                         |
-| **Modes**      | Image tiles mode (landscape photo sliced into tiles)        |
+| **Modes**      | Multi-image support (cycles through multiple photo options) |
+| **UX**         | Premium glassmorphism UI with shadow and glow physics       |
 | **UX**         | Smooth ease-out slide animations                            |
 | **UX**         | Tile hover highlighting                                     |
 | **UX**         | Correct-position visual feedback (green tint)               |
@@ -32,6 +33,7 @@ Coding** take-home exam.
 | **Controls**   | Restart / reshuffle (`R`)                                   |
 | **Controls**   | Return to menu (`M` or `Esc`)                               |
 | **Advanced**   | A* auto-solve demo for 3×3 puzzles                          |
+| **Advanced**   | Persistent Auto-Solve mode for screen-saver loops           |
 | **Advanced**   | Best score tracking (in-memory, per session)                |
 | **Advanced**   | FPS-independent game loop (60 FPS)                          |
 
@@ -75,8 +77,9 @@ python main.py
 | **U**                 | Undo the last move                       |
 | **P**                 | Pause / resume the timer                 |
 | **M** or **Esc**      | Return to the main menu                  |
-| **Enter** (menu)      | Quick-start a new game                   |
-| **Q** (menu)          | Quit the application                     |
+| **Mouse click (HUD)** | HUD shortcuts (R, U, P, M) are fully clickable           |
+| **Up/Down/Enter**     | Navigate and select buttons in the main menu             |
+| **Q** (menu)          | Quit the application                                     |
 
 ---
 
