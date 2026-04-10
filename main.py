@@ -156,13 +156,13 @@ class SlidingPuzzleApp:
     # ------------------------------------------------------------------
     def _current_image_path(self):
         """Get the path of the currently selected image."""
-        if self.available_images:
+        if self.available_images and 0 <= self.current_image_idx < len(self.available_images):
             return self.available_images[self.current_image_idx][1]
         return None
 
     def _current_image_name(self):
         """Get the display name of the currently selected image."""
-        if self.available_images:
+        if self.available_images and 0 <= self.current_image_idx < len(self.available_images):
             return self.available_images[self.current_image_idx][0]
         return ""
 
@@ -272,11 +272,18 @@ class SlidingPuzzleApp:
                     elif action == "grid_size":
                         self._toggle_size()
                     elif action == "tile_mode":
-                        self.image_mode = not self.image_mode
-                        if self.image_mode:
-                            self._load_current_image()
-                    elif action == "change_image":
-                        self._cycle_image()
+                        if not self.image_mode:
+                            if self.available_images:
+                                self.image_mode = True
+                                self.current_image_idx = 0
+                                self._load_current_image()
+                        else:
+                            self.current_image_idx += 1
+                            if self.current_image_idx >= len(self.available_images):
+                                self.image_mode = False
+                                self.current_image_idx = 0
+                            else:
+                                self._load_current_image()
                     elif action == "auto_solve":
                         self._start_new_game()
                         self._start_auto_solve()

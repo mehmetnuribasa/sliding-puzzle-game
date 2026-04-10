@@ -607,19 +607,34 @@ class Renderer:
             bmin, bsec = divmod(bs, 60)
             self._hud_stat("BEST", f"{bm} / {bmin:02d}:{bsec:02d}", 240, 52)
 
-        # Control hints
-        hints = "[R] Restart  [U] Undo  [P] Pause  [M] Menu"
-        ht = self.font_tiny.render(hints, True, (70, 75, 100))
-        self.screen.blit(ht, (self.WIN_W - ht.get_width() - 12, 96))
-
-        # Pause indicator
-        if board.paused:
-            pt = self.font_medium.render(
-                "PAUSED", True, COLORS["pause_text"]
-            )
-            self.screen.blit(
-                pt, (self.WIN_W - pt.get_width() - 12, 50)
-            )
+        # Control hints (2x2 grid between stats and goal preview)
+        start_x_base = 360
+        start_y_base = 42
+        
+        hints = [("R", "Restart"), ("U", "Undo"), ("P", "Pause"), ("M", "Menu")]
+        
+        for i, (key, action) in enumerate(hints):
+            col = i % 2
+            row = i // 2
+            
+            x = start_x_base + col * 70
+            y = start_y_base + row * 24
+            
+            # Render the key name
+            key_txt = self.font_tiny.render(key, True, (255, 255, 255))
+            kw, kh = 18, 18 # Fixed tiny size for the box
+            
+            # Draw rounded box
+            k_surf = pygame.Surface((kw, kh), pygame.SRCALPHA)
+            pygame.draw.rect(k_surf, (60, 70, 100, 150), pygame.Rect(0, 0, kw, kh), border_radius=3)
+            pygame.draw.rect(k_surf, (120, 140, 200, 180), pygame.Rect(0, 0, kw, kh), 1, border_radius=3)
+            # Center the text
+            k_surf.blit(key_txt, (kw//2 - key_txt.get_width()//2 + 1, kh//2 - key_txt.get_height()//2 + 1))
+            self.screen.blit(k_surf, (x, y))
+            
+            # Action description
+            act_txt = self.font_tiny.render(action, True, (130, 140, 170))
+            self.screen.blit(act_txt, (x + kw + 4, y + 2))
 
     def _draw_pill(self, x, y, text, color):
         """Draw a small pill-shaped badge."""
@@ -637,7 +652,7 @@ class Renderer:
 
     def _hud_stat(self, label, value, x, y):
         """Draw a label/value pair in the HUD with styling."""
-        lt = self.font_tiny.render(label, True, (90, 95, 120))
+        lt = self.font_tiny.render(label, True, (120, 125, 150))
         vt = self.font_medium.render(value, True, COLORS["hud_accent"])
         self.screen.blit(lt, (x, y))
         self.screen.blit(vt, (x, y + 16))
@@ -778,12 +793,9 @@ class Renderer:
             (f"Grid: {selected_size}x{selected_size}", "grid_size"),
             (f"Mode: {img_label}", "tile_mode"),
         ]
-        if image_mode and image_count > 1:
-            items.append((f"Image: {image_idx + 1}/{image_count} (click to change)", "change_image"))
-        items.extend([
-            ("Auto Solve (3x3)", "auto_solve"),
-            ("Quit", "quit"),
-        ])
+        if selected_size == 3:
+            items.append(("Auto Solve (3x3)", "auto_solve"))
+        items.append(("Quit", "quit"))
 
         bw, bh, spacing = 340, 50, 60
         start_y = 175
@@ -827,7 +839,7 @@ class Renderer:
 
         # Footer
         ft = self.font_tiny.render(
-            "CSE444 - Vibe Coding Project", True, (50, 50, 70)
+            "CSE444 - Vibe Coding Project", True, (100, 105, 130)
         )
         self.screen.blit(
             ft, ft.get_rect(center=(cx, self.WIN_W + self.HUD_H - 25))
