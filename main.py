@@ -409,6 +409,7 @@ class SlidingPuzzleApp:
                 self.win_w - 115,
                 self.renderer.HUD_H - 95,
                 preview_size=90,
+                image_mode=self.image_mode,
             )
 
             if self.board.paused:

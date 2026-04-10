@@ -837,7 +837,7 @@ class Renderer:
     # ------------------------------------------------------------------
     # Goal-state preview (small) — improved mini tiles
     # ------------------------------------------------------------------
-    def draw_goal_preview(self, board, x, y, preview_size=100):
+    def draw_goal_preview(self, board, x, y, preview_size=100, image_mode=False):
         """Draw a miniature view of the goal (solved) state."""
         size = board.size
         ts = preview_size // size
@@ -872,9 +872,16 @@ class Renderer:
                         self.screen, COLORS["empty"], tr, border_radius=3
                     )
                 else:
-                    clr = self._tile_color(val, total)
-                    pygame.draw.rect(self.screen, clr, tr, border_radius=4)
-                    if size <= 4:
-                        ft = pygame.font.Font(None, max(14, 50 // size))
-                        t = ft.render(str(val), True, COLORS["tile_text"])
-                        self.screen.blit(t, t.get_rect(center=tr.center))
+                    if image_mode and val in self.tile_surfaces:
+                        surf = self.tile_surfaces[val]
+                        scaled = pygame.transform.smoothscale(
+                            surf, (int(tr.width), int(tr.height))
+                        )
+                        self.screen.blit(scaled, tr.topleft)
+                    else:
+                        clr = self._tile_color(val, total)
+                        pygame.draw.rect(self.screen, clr, tr, border_radius=4)
+                        if size <= 4:
+                            ft = pygame.font.Font(None, max(14, 50 // size))
+                            t = ft.render(str(val), True, COLORS["tile_text"])
+                            self.screen.blit(t, t.get_rect(center=tr.center))
