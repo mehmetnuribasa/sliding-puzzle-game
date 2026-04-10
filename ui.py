@@ -613,6 +613,9 @@ class Renderer:
         
         hints = [("R", "Restart"), ("U", "Undo"), ("P", "Pause"), ("M", "Menu")]
         
+        hud_buttons = []
+        mouse = pygame.mouse.get_pos()
+        
         for i, (key, action) in enumerate(hints):
             col = i % 2
             row = i // 2
@@ -626,15 +629,30 @@ class Renderer:
             
             # Draw rounded box
             k_surf = pygame.Surface((kw, kh), pygame.SRCALPHA)
-            pygame.draw.rect(k_surf, (60, 70, 100, 150), pygame.Rect(0, 0, kw, kh), border_radius=3)
-            pygame.draw.rect(k_surf, (120, 140, 200, 180), pygame.Rect(0, 0, kw, kh), 1, border_radius=3)
-            # Center the text
-            k_surf.blit(key_txt, (kw//2 - key_txt.get_width()//2 + 1, kh//2 - key_txt.get_height()//2 + 1))
-            self.screen.blit(k_surf, (x, y))
             
             # Action description
             act_txt = self.font_tiny.render(action, True, (130, 140, 170))
+            
+            # Interactive bounds
+            btn_rect = pygame.Rect(x, y, kw + 4 + act_txt.get_width(), kh)
+            hov = btn_rect.collidepoint(mouse)
+            
+            if hov:
+                pygame.draw.rect(k_surf, (80, 100, 150, 200), pygame.Rect(0, 0, kw, kh), border_radius=3)
+                pygame.draw.rect(k_surf, (150, 180, 255, 255), pygame.Rect(0, 0, kw, kh), 1, border_radius=3)
+                act_txt = self.font_tiny.render(action, True, (200, 210, 255))
+            else:
+                pygame.draw.rect(k_surf, (60, 70, 100, 150), pygame.Rect(0, 0, kw, kh), border_radius=3)
+                pygame.draw.rect(k_surf, (120, 140, 200, 180), pygame.Rect(0, 0, kw, kh), 1, border_radius=3)
+            
+            # Center the text
+            k_surf.blit(key_txt, (kw//2 - key_txt.get_width()//2 + 1, kh//2 - key_txt.get_height()//2 + 1))
+            self.screen.blit(k_surf, (x, y))
             self.screen.blit(act_txt, (x + kw + 4, y + 2))
+            
+            hud_buttons.append((btn_rect, action.lower()))
+            
+        return hud_buttons
 
     def _draw_pill(self, x, y, text, color):
         """Draw a small pill-shaped badge."""
@@ -749,7 +767,7 @@ class Renderer:
     # Main menu — premium styling
     # ------------------------------------------------------------------
     def draw_menu(self, selected_size=3, image_mode=False, image_name="",
-                  image_count=1, image_idx=0):
+                  image_count=1, image_idx=0, selected_idx=0):
         """
         Draw the main menu and return a list of ``(Rect, action_str)``
         tuples for click detection.
@@ -804,7 +822,7 @@ class Renderer:
 
         for i, (label, action) in enumerate(items):
             rect = pygame.Rect(cx - bw // 2, start_y + i * spacing, bw, bh)
-            hov = rect.collidepoint(mouse)
+            hov = rect.collidepoint(mouse) or (i == selected_idx)
 
             # Button with gradient border
             btn_surf = pygame.Surface((bw, bh), pygame.SRCALPHA)

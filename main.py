@@ -129,6 +129,7 @@ class SlidingPuzzleApp:
         self.selected_size = DEFAULT_SIZE
         self.image_mode = False
         self.menu_buttons = []
+        self.menu_selection_idx = 0
 
         # Multi-image support
         self.available_images = discover_images(IMAGES_DIR)
@@ -261,40 +262,54 @@ class SlidingPuzzleApp:
     # ------------------------------------------------------------------
     # Event handlers per state
     # ------------------------------------------------------------------
+    def _execute_menu_action(self, action):
+        """Execute a selected menu action."""
+        self._play(self.snd_click)
+        if action == "new_game":
+            self._start_new_game()
+        elif action == "grid_size":
+            self._toggle_size()
+        elif action == "tile_mode":
+            if not self.image_mode:
+                if self.available_images:
+                    self.image_mode = True
+                    self.current_image_idx = 0
+                    self._load_current_image()
+            else:
+                self.current_image_idx += 1
+                if self.current_image_idx >= len(self.available_images):
+                    self.image_mode = False
+                    self.current_image_idx = 0
+                else:
+                    self._load_current_image()
+        elif action == "auto_solve":
+            self._start_new_game()
+            self._start_auto_solve()
+        elif action == "quit":
+            pygame.quit()
+            sys.exit()
+
     def _handle_menu_events(self, event):
         """Process events while in the main menu."""
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            for rect, action in self.menu_buttons:
+            for i, (rect, action) in enumerate(self.menu_buttons):
                 if rect.collidepoint(event.pos):
-                    self._play(self.snd_click)
-                    if action == "new_game":
-                        self._start_new_game()
-                    elif action == "grid_size":
-                        self._toggle_size()
-                    elif action == "tile_mode":
-                        if not self.image_mode:
-                            if self.available_images:
-                                self.image_mode = True
-                                self.current_image_idx = 0
-                                self._load_current_image()
-                        else:
-                            self.current_image_idx += 1
-                            if self.current_image_idx >= len(self.available_images):
-                                self.image_mode = False
-                                self.current_image_idx = 0
-                            else:
-                                self._load_current_image()
-                    elif action == "auto_solve":
-                        self._start_new_game()
-                        self._start_auto_solve()
-                    elif action == "quit":
-                        pygame.quit()
-                        sys.exit()
+                    self.menu_selection_idx = i
+                    self._execute_menu_action(action)
                     break
 
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN:
-                self._start_new_game()
+            if event.key == pygame.K_UP:
+                self.menu_selection_idx = max(0, self.menu_selection_idx - 1)
+                self._play(self.snd_click)
+            elif event.key == pygame.K_DOWN:
+                if self.menu_buttons:
+                    self.menu_selection_idx = min(len(self.menu_buttons) - 1, self.menu_selection_idx + 1)
+                self._play(self.snd_click)
+            elif event.key == pygame.K_RETURN:
+                if self.menu_buttons and 0 <= self.menu_selection_idx < len(self.menu_buttons):
+                    action = self.menu_buttons[self.menu_selection_idx][1]
+                    self._execute_menu_action(action)
             elif event.key == pygame.K_q:
                 pygame.quit()
                 sys.exit()
@@ -330,6 +345,22 @@ class SlidingPuzzleApp:
                     self._do_direction_move(direction_map[event.key])
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # Check for HUD button clicks first
+            for rect, action in getattr(self, "hud_buttons", []):
+                if rect.collidepoint(event.pos):
+                    self._play(self.snd_click)
+                    if action == "restart":
+                        self._start_new_game()
+                    elif action == "undo":
+                        if not self.auto_solving:
+                            self._do_undo()
+                    elif action == "pause":
+                        self.board.toggle_pause()
+                    elif action == "menu":
+                        self.state = STATE_MENU
+                        self.auto_solving = False
+                    return
+
             if not self.board.paused and not self.auto_solving:
                 pos = self.renderer.pixel_to_grid(
                     event.pos[0], event.pos[1], self.board.size
@@ -400,12 +431,13 @@ class SlidingPuzzleApp:
                 self._current_image_name(),
                 len(self.available_images),
                 self.current_image_idx,
+                self.menu_selection_idx,
             )
         elif self.state in (STATE_PLAYING, STATE_WON):
             # Draw gradient background + particles
             self.renderer.draw_background()
 
-            self.renderer.draw_hud(
+            self.hud_buttons = self.renderer.draw_hud(
                 self.board, self.image_mode, self._current_image_name()
             )
             self.renderer.draw_board(self.board, self.image_mode)
