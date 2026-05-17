@@ -789,7 +789,7 @@ class Renderer:
         # Animated title glow
         glow_alpha = int(25 + 15 * math.sin(self._time * 2))
         title = self.font_title.render("SLIDING PUZZLE", True, (255, 255, 255))
-        tr = title.get_rect(center=(cx, 80))
+        tr = title.get_rect(center=(cx, 75))
         
         # Super nice modern soft glow behind title
         glow = pygame.Surface((title.get_width() + 100, title.get_height() + 60), pygame.SRCALPHA)
@@ -803,136 +803,202 @@ class Renderer:
         self.screen.blit(title, tr)
 
         # Subtitle
-        sub = self.font_medium.render(
-            "A Classic Logic Puzzle Game", True, (160, 175, 205)
+        sub = self.font_small.render(
+            "A Classic Logic Puzzle Game", True, (140, 155, 185)
         )
-        self.screen.blit(sub, sub.get_rect(center=(cx, 134)))
+        self.screen.blit(sub, sub.get_rect(center=(cx, 120)))
 
-        # Decorative modern bar
-        bar = pygame.Surface((60, 4), pygame.SRCALPHA)
-        bar.fill((100, 140, 255, 200))
-        self.screen.blit(bar, (cx - 30, 160))
-
-        # Menu buttons & Headers
+        # ── Build menu items ──────────────────────────────────────────
         diff_label = difficulty.capitalize()
         diff_size_info = f"{selected_size}x{selected_size}"
         img_label = image_name if image_mode and image_name else "Numbers"
+
+        # Each item: (icon, label, action, style)
+        #   style: "hero"  = large gradient button (primary CTA)
+        #          "normal" = standard glass pill
+        #          "sub"    = smaller secondary button
+        #          "quit"   = outline-only bottom button
+        #          "divider"= thin gradient line with tiny label
         items = [
-            ("--- PLAY ---", "header"),
-            ("New Game", "new_game"),
+            (None,  "PLAY",                              "divider", "divider"),
+            ("\u25B6", "New Game",                          "new_game", "hero"),
         ]
         if selected_size == 3:
-            items.append(("Auto Solve (3x3)", "auto_solve"))
-            
+            items.append(("\u2699", "Auto Solve (3\u00d73)",     "auto_solve", "normal"))
+
         items.extend([
-            ("--- SETTINGS ---", "header"),
-            (f"Difficulty: {diff_label}  ({diff_size_info})", "difficulty"),
-            (f"Tile Mode: {img_label}", "tile_mode"),
-            ("Load Custom Image", "load_image"),
-            ("Quit", "quit")
+            (None,  "SETTINGS",                          "divider", "divider"),
+            ("\u2B24", f"{diff_label}  \u2022  {diff_size_info}",  "difficulty", "normal"),
+            ("\u29C9", f"Tiles: {img_label}",               "tile_mode", "normal"),
+            ("\u2B9D", "Load Custom Image",                "load_image", "sub"),
+            (None,  None,                                "spacer",  "spacer"),
+            ("\u2716", "Quit",                              "quit",      "quit"),
         ])
 
-        bw, bh = 360, 50
-        current_y = 155  # Shifted up slightly more to balance the extra gaps
+        bw = 380
+        current_y = 145
         mouse = pygame.mouse.get_pos()
         buttons = []
-        interactive_index = 0  # To handle keyboard selection separately from headers
+        interactive_index = 0
 
-        for label, action in items:
-            if action == "header":
-                if label == "--- SETTINGS ---":
-                    current_y += 15  # Extra gap between Play group and Settings group
-                header_surf = self.font_small.render(label, True, (130, 140, 180))
-                self.screen.blit(header_surf, header_surf.get_rect(center=(cx, current_y + 12)))
+        for icon, label, action, style in items:
+            # ── Divider ───────────────────────────────────────────────
+            if style == "divider":
+                current_y += 8
+                div_w = 300
+                div_x = cx - div_w // 2
+                # Gradient divider line
+                div_surf = pygame.Surface((div_w, 1), pygame.SRCALPHA)
+                for px in range(div_w):
+                    t = px / div_w
+                    a = int(60 * math.sin(t * math.pi))  # fade in/out
+                    div_surf.set_at((px, 0), (140, 170, 255, a))
+                self.screen.blit(div_surf, (div_x, current_y))
+                # Small section label
+                sec_surf = self.font_tiny.render(label, True, (100, 115, 155))
+                self.screen.blit(sec_surf, sec_surf.get_rect(center=(cx, current_y + 14)))
                 current_y += 30
                 continue
-
-            # Dynamic layout adjustments for visual grouping
-            item_bw, item_bh = bw, bh
-            font_to_use = self.font_medium
             
-            if action == "load_image":
-                current_y -= 8   # Pull closer to Tile Mode
-                item_bw, item_bh = 300, 36  # Smaller sub-button
-                font_to_use = self.font_small
-            elif action == "quit":
-                current_y += 35  # Huge gap pushing Quit to the bottom
+            # ── Spacer ────────────────────────────────────────────────
+            if style == "spacer":
+                current_y += 20
+                continue
 
-                
+            # ── Size & font per style ─────────────────────────────────
+            if style == "hero":
+                item_bw, item_bh = bw, 56
+                font = self.font_medium
+            elif style == "sub":
+                item_bw, item_bh = 300, 36
+                font = self.font_small
+                current_y -= 6
+            elif style == "quit":
+                item_bw, item_bh = 200, 40
+                font = self.font_small
+            else:   # normal
+                item_bw, item_bh = bw, 48
+                font = self.font_medium
+
             item_x = cx - item_bw // 2
             rect = pygame.Rect(item_x, current_y, item_bw, item_bh)
             hov = rect.collidepoint(mouse) or (interactive_index == selected_idx)
 
-            # Drop shadow
-            shadow = pygame.Surface((item_bw+8, item_bh+8), pygame.SRCALPHA)
-            pygame.draw.rect(shadow, (0, 0, 0, 50 if hov else 20), shadow.get_rect(), border_radius=14)
-            self.screen.blit(shadow, (rect.x-2, rect.y+2))
+            # ── Drop shadow ───────────────────────────────────────────
+            shadow = pygame.Surface((item_bw + 8, item_bh + 8), pygame.SRCALPHA)
+            pygame.draw.rect(shadow, (0, 0, 0, 55 if hov else 18),
+                             shadow.get_rect(), border_radius=14)
+            self.screen.blit(shadow, (rect.x - 2, rect.y + 3))
 
-            # Glass pill button
-            btn_surf = pygame.Surface((item_bw, item_bh), pygame.SRCALPHA)
-            bg_alpha = 45 if hov else 15
-            pygame.draw.rect(
-                btn_surf, (255, 255, 255, bg_alpha), pygame.Rect(0, 0, item_bw, item_bh), border_radius=14
-            )
-            
-            if hov:
-                # Sleek left bar accent — use difficulty colour for the difficulty button
-                accent = self._DIFF_COLORS.get(difficulty, (100, 140, 255)) if action == "difficulty" else (100, 140, 255)
-                # Adjust accent bar size based on button height
-                bar_h = item_bh - 24
-                pygame.draw.rect(btn_surf, accent, pygame.Rect(14, item_bh//2 - bar_h//2, 4, bar_h), border_radius=2)
-                # Outer delicate glass border
-                pygame.draw.rect(btn_surf, (255, 255, 255, 100), pygame.Rect(0, 0, item_bw, item_bh), width=1, border_radius=14)
+            # ── Button surface ────────────────────────────────────────
+            btn = pygame.Surface((item_bw, item_bh), pygame.SRCALPHA)
+
+            if style == "hero":
+                # Gradient-filled hero button
+                for row in range(item_bh):
+                    t = row / item_bh
+                    r = int(60 + 40 * t)  if not hov else int(70 + 50 * t)
+                    g = int(110 + 30 * t) if not hov else int(130 + 40 * t)
+                    b = int(220 - 20 * t) if not hov else int(255 - 10 * t)
+                    pygame.draw.line(btn, (r, g, b, 200 if hov else 140),
+                                     (0, row), (item_bw, row))
+                pygame.draw.rect(btn, (255, 255, 255, 120 if hov else 50),
+                                 pygame.Rect(0, 0, item_bw, item_bh),
+                                 width=1, border_radius=14)
+                # Clip to rounded rect
+                mask = pygame.Surface((item_bw, item_bh), pygame.SRCALPHA)
+                pygame.draw.rect(mask, (255, 255, 255, 255),
+                                 pygame.Rect(0, 0, item_bw, item_bh), border_radius=14)
+                btn.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+
+            elif style == "quit":
+                # Outline-only quit button — subtle
+                border_c = (200, 80, 80, 120) if hov else (120, 70, 80, 60)
+                pygame.draw.rect(btn, (0, 0, 0, 0),
+                                 pygame.Rect(0, 0, item_bw, item_bh), border_radius=12)
+                pygame.draw.rect(btn, border_c,
+                                 pygame.Rect(0, 0, item_bw, item_bh),
+                                 width=1, border_radius=12)
             else:
-                pygame.draw.rect(btn_surf, (255, 255, 255, 30), pygame.Rect(0, 0, item_bw, item_bh), width=1, border_radius=14)
+                # Standard glass pill
+                bg_a = 50 if hov else 15
+                pygame.draw.rect(btn, (255, 255, 255, bg_a),
+                                 pygame.Rect(0, 0, item_bw, item_bh), border_radius=14)
+                if hov:
+                    accent = self._DIFF_COLORS.get(difficulty, (100, 140, 255)) if action == "difficulty" else (100, 140, 255)
+                    bar_h = max(item_bh - 26, 8)
+                    pygame.draw.rect(btn, accent,
+                                     pygame.Rect(12, item_bh // 2 - bar_h // 2, 4, bar_h),
+                                     border_radius=2)
+                    pygame.draw.rect(btn, (255, 255, 255, 100),
+                                     pygame.Rect(0, 0, item_bw, item_bh),
+                                     width=1, border_radius=14)
+                else:
+                    pygame.draw.rect(btn, (255, 255, 255, 30),
+                                     pygame.Rect(0, 0, item_bw, item_bh),
+                                     width=1, border_radius=14)
 
-            self.screen.blit(btn_surf, rect.topleft)
+            self.screen.blit(btn, rect.topleft)
 
-            # Elegant text placement
-            tc = (255, 255, 255) if hov else (190, 200, 220)
-            text_surf = font_to_use.render(label, True, tc)
-            
-            # Left align the text for modern list look
-            txt_x = rect.x + 36 if hov else rect.x + 28
+            # ── Icon ──────────────────────────────────────────────────
+            if icon and action != "difficulty":
+                ic_color = (255, 255, 255) if hov else (160, 175, 210)
+                if action == "quit":
+                    ic_color = (230, 100, 100) if hov else (150, 90, 90)
+                ic_surf = self.font_small.render(icon, True, ic_color)
+                ic_x = rect.x + 18
+                ic_y = rect.y + item_bh // 2 - ic_surf.get_height() // 2
+                self.screen.blit(ic_surf, (ic_x, ic_y))
+
+            # ── Label text ────────────────────────────────────────────
+            if style == "quit":
+                tc = (230, 110, 110) if hov else (150, 100, 110)
+            elif style == "hero":
+                tc = (255, 255, 255)
+            else:
+                tc = (255, 255, 255) if hov else (190, 200, 220)
+
+            text_surf = font.render(label, True, tc)
+            # Offset text to leave room for icon
+            icon_offset = 40 if icon and action != "difficulty" else 0
+            txt_x = rect.x + 24 + icon_offset + (8 if hov else 0)
             txt_y = rect.y + item_bh // 2 - text_surf.get_height() // 2
-            
             self.screen.blit(text_surf, (txt_x, txt_y))
 
-            # Right-side indicator icons
+            # ── Right-side indicators ─────────────────────────────────
             if action == "difficulty":
-                # Coloured dot for current difficulty
-                dot_color = self._DIFF_COLORS.get(difficulty, (150, 150, 150))
-                dot_x = rect.right - 40
-                dot_y = rect.y + item_bh // 2
-                pygame.draw.circle(self.screen, dot_color, (dot_x, dot_y), 6)
-                pygame.draw.circle(self.screen, (255, 255, 255, 120), (dot_x, dot_y), 6, 1)
+                dot_c = self._DIFF_COLORS.get(difficulty, (150, 150, 150))
+                # Draw coloured difficulty dot as icon on left
+                dot_x_l = rect.x + 24
+                dot_y_l = rect.y + item_bh // 2
+                pygame.draw.circle(self.screen, dot_c, (dot_x_l, dot_y_l), 7)
+                pygame.draw.circle(self.screen, (255, 255, 255, 80), (dot_x_l, dot_y_l), 7, 1)
+                # Also a small chevron on right to hint "click to change"
+                chev = self.font_small.render("\u203A", True, (140, 170, 255) if hov else (80, 95, 130))
+                self.screen.blit(chev, (rect.right - 28, rect.y + item_bh // 2 - chev.get_height() // 2))
             elif action == "load_image":
-                # Small folder icon drawn with pygame primitives
-                ic = (180, 200, 255) if hov else (100, 120, 160)
-                ix, iy = rect.right - 36, rect.y + item_bh // 2 - 6
-                # Folder body
-                pygame.draw.rect(self.screen, ic,
-                                 pygame.Rect(ix, iy + 3, 16, 10), border_radius=2)
-                # Folder tab (top-left notch)
-                pygame.draw.rect(self.screen, ic,
-                                 pygame.Rect(ix, iy, 7, 3), border_radius=1)
-            elif hov:
-                # Arrow indicator on the right edge for all other buttons
-                arrow = self.font_medium.render("›", True, (140, 170, 255))
-                self.screen.blit(arrow, (rect.right - 35, rect.y + item_bh//2 - arrow.get_height()//2 - 2))
+                # Folder icon on right
+                ic2 = (180, 200, 255) if hov else (100, 120, 160)
+                ix, iy = rect.right - 34, rect.y + item_bh // 2 - 5
+                pygame.draw.rect(self.screen, ic2,
+                                 pygame.Rect(ix, iy + 2, 14, 9), border_radius=2)
+                pygame.draw.rect(self.screen, ic2,
+                                 pygame.Rect(ix, iy - 1, 6, 3), border_radius=1)
+            elif style not in ("hero", "quit") and hov:
+                arr = self.font_medium.render("\u203A", True, (140, 170, 255))
+                self.screen.blit(arr, (rect.right - 30,
+                                       rect.y + item_bh // 2 - arr.get_height() // 2 - 1))
 
             buttons.append((rect, action))
-            
-            # Advance current_y for next item
-            current_y += item_bh + 12
+            current_y += item_bh + 10
             interactive_index += 1
 
         # Footer
         ft = self.font_tiny.render(
-            "CSE444 - Vibe Coding Project", True, (100, 105, 130)
+            "CSE444  \u2022  Vibe Coding Project", True, (80, 90, 115)
         )
         self.screen.blit(
-            ft, ft.get_rect(center=(cx, self.WIN_W + self.HUD_H - 25))
+            ft, ft.get_rect(center=(cx, self.WIN_W + self.HUD_H - 22))
         )
         return buttons
 
