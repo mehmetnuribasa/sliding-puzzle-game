@@ -6,6 +6,11 @@ Supports 3x3 and 4x4 grids, numbered and image tile modes (with
 multiple selectable images), smooth animations, undo, pause, timer,
 and an A* auto-solver demo for 3x3 puzzles.
 
+Maintenance additions (CSE444 Homework):
+  - Difficulty modes: Easy / Medium / Hard
+  - Custom image loading from disk (tkinter file dialog)
+  - Multi-tile sliding in one move
+
 CSE444 -- Vibe Coding Project
 """
 
@@ -13,6 +18,8 @@ import sys
 import os
 import glob
 import pygame
+import tkinter as tk
+from tkinter import filedialog
 
 from game import Board
 from ui import Renderer, COLORS
@@ -183,6 +190,50 @@ class SlidingPuzzleApp:
             )
             self._load_current_image()
 
+    def _load_custom_image(self):
+        """
+        Open a native file-picker dialog (via tkinter) so the user can
+        choose any image from their computer.  The chosen image is
+        appended to *available_images*, image-mode is activated, and
+        the renderer loads the new image immediately.
+
+        PyGame is temporarily paused (event pump kept alive) while the
+        dialog is open to prevent the OS from marking the window as
+        unresponsive.
+        """
+        # Hide the tkinter root window — we only want the dialog.
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)   # Keep dialog above PyGame window
+
+        path = filedialog.askopenfilename(
+            title="Select a puzzle image",
+            filetypes=[
+                ("Image files", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"),
+                ("All files", "*.*"),
+            ],
+        )
+        root.destroy()
+
+        if not path or not os.path.isfile(path):
+            return  # User cancelled
+
+        # Build a display name from the filename
+        name = os.path.splitext(os.path.basename(path))[0]
+        display = name.replace("_", " ").replace("-", " ").title()
+
+        # Avoid duplicate entries
+        existing_paths = [p for _, p in self.available_images]
+        if path not in existing_paths:
+            self.available_images.append((display, path))
+
+        # Switch to the newly added (or existing) image
+        self.current_image_idx = next(
+            i for i, (_, p) in enumerate(self.available_images) if p == path
+        )
+        self.image_mode = True
+        self._load_current_image()
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -283,6 +334,8 @@ class SlidingPuzzleApp:
             self._start_new_game()
         elif action == "difficulty":
             self._cycle_difficulty()
+        elif action == "load_image":
+            self._load_custom_image()
         elif action == "tile_mode":
             if not self.image_mode:
                 if self.available_images:

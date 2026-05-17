@@ -813,74 +813,119 @@ class Renderer:
         bar.fill((100, 140, 255, 200))
         self.screen.blit(bar, (cx - 30, 160))
 
-        # Menu buttons
+        # Menu buttons & Headers
         diff_label = difficulty.capitalize()
         diff_size_info = f"{selected_size}x{selected_size}"
         img_label = image_name if image_mode and image_name else "Numbers"
         items = [
+            ("--- PLAY ---", "header"),
             ("New Game", "new_game"),
-            (f"Difficulty: {diff_label}  ({diff_size_info})", "difficulty"),
-            (f"Mode: {img_label}", "tile_mode"),
         ]
         if selected_size == 3:
             items.append(("Auto Solve (3x3)", "auto_solve"))
-        items.append(("Quit", "quit"))
+            
+        items.extend([
+            ("--- SETTINGS ---", "header"),
+            (f"Difficulty: {diff_label}  ({diff_size_info})", "difficulty"),
+            (f"Tile Mode: {img_label}", "tile_mode"),
+            ("Load Custom Image", "load_image"),
+            ("Quit", "quit")
+        ])
 
-        bw, bh, spacing = 360, 56, 68
-        start_y = 195
+        bw, bh = 360, 50
+        current_y = 155  # Shifted up slightly more to balance the extra gaps
         mouse = pygame.mouse.get_pos()
         buttons = []
+        interactive_index = 0  # To handle keyboard selection separately from headers
 
-        for i, (label, action) in enumerate(items):
-            rect = pygame.Rect(cx - bw // 2, start_y + i * spacing, bw, bh)
-            hov = rect.collidepoint(mouse) or (i == selected_idx)
+        for label, action in items:
+            if action == "header":
+                if label == "--- SETTINGS ---":
+                    current_y += 15  # Extra gap between Play group and Settings group
+                header_surf = self.font_small.render(label, True, (130, 140, 180))
+                self.screen.blit(header_surf, header_surf.get_rect(center=(cx, current_y + 12)))
+                current_y += 30
+                continue
+
+            # Dynamic layout adjustments for visual grouping
+            item_bw, item_bh = bw, bh
+            font_to_use = self.font_medium
+            
+            if action == "load_image":
+                current_y -= 8   # Pull closer to Tile Mode
+                item_bw, item_bh = 300, 36  # Smaller sub-button
+                font_to_use = self.font_small
+            elif action == "quit":
+                current_y += 35  # Huge gap pushing Quit to the bottom
+
+                
+            item_x = cx - item_bw // 2
+            rect = pygame.Rect(item_x, current_y, item_bw, item_bh)
+            hov = rect.collidepoint(mouse) or (interactive_index == selected_idx)
 
             # Drop shadow
-            shadow = pygame.Surface((bw+8, bh+8), pygame.SRCALPHA)
+            shadow = pygame.Surface((item_bw+8, item_bh+8), pygame.SRCALPHA)
             pygame.draw.rect(shadow, (0, 0, 0, 50 if hov else 20), shadow.get_rect(), border_radius=14)
             self.screen.blit(shadow, (rect.x-2, rect.y+2))
 
             # Glass pill button
-            btn_surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
+            btn_surf = pygame.Surface((item_bw, item_bh), pygame.SRCALPHA)
             bg_alpha = 45 if hov else 15
             pygame.draw.rect(
-                btn_surf, (255, 255, 255, bg_alpha), pygame.Rect(0, 0, bw, bh), border_radius=14
+                btn_surf, (255, 255, 255, bg_alpha), pygame.Rect(0, 0, item_bw, item_bh), border_radius=14
             )
             
             if hov:
                 # Sleek left bar accent — use difficulty colour for the difficulty button
                 accent = self._DIFF_COLORS.get(difficulty, (100, 140, 255)) if action == "difficulty" else (100, 140, 255)
-                pygame.draw.rect(btn_surf, accent, pygame.Rect(14, bh//2 - 12, 4, 24), border_radius=2)
+                # Adjust accent bar size based on button height
+                bar_h = item_bh - 24
+                pygame.draw.rect(btn_surf, accent, pygame.Rect(14, item_bh//2 - bar_h//2, 4, bar_h), border_radius=2)
                 # Outer delicate glass border
-                pygame.draw.rect(btn_surf, (255, 255, 255, 100), pygame.Rect(0, 0, bw, bh), width=1, border_radius=14)
+                pygame.draw.rect(btn_surf, (255, 255, 255, 100), pygame.Rect(0, 0, item_bw, item_bh), width=1, border_radius=14)
             else:
-                pygame.draw.rect(btn_surf, (255, 255, 255, 30), pygame.Rect(0, 0, bw, bh), width=1, border_radius=14)
+                pygame.draw.rect(btn_surf, (255, 255, 255, 30), pygame.Rect(0, 0, item_bw, item_bh), width=1, border_radius=14)
 
             self.screen.blit(btn_surf, rect.topleft)
 
             # Elegant text placement
             tc = (255, 255, 255) if hov else (190, 200, 220)
-            text_surf = self.font_medium.render(label, True, tc)
+            text_surf = font_to_use.render(label, True, tc)
             
             # Left align the text for modern list look
             txt_x = rect.x + 36 if hov else rect.x + 28
-            txt_y = rect.y + bh // 2 - text_surf.get_height() // 2
+            txt_y = rect.y + item_bh // 2 - text_surf.get_height() // 2
             
             self.screen.blit(text_surf, (txt_x, txt_y))
 
-            # Difficulty button — draw a small coloured dot indicator
+            # Right-side indicator icons
             if action == "difficulty":
+                # Coloured dot for current difficulty
                 dot_color = self._DIFF_COLORS.get(difficulty, (150, 150, 150))
                 dot_x = rect.right - 40
-                dot_y = rect.y + bh // 2
+                dot_y = rect.y + item_bh // 2
                 pygame.draw.circle(self.screen, dot_color, (dot_x, dot_y), 6)
                 pygame.draw.circle(self.screen, (255, 255, 255, 120), (dot_x, dot_y), 6, 1)
+            elif action == "load_image":
+                # Small folder icon drawn with pygame primitives
+                ic = (180, 200, 255) if hov else (100, 120, 160)
+                ix, iy = rect.right - 36, rect.y + item_bh // 2 - 6
+                # Folder body
+                pygame.draw.rect(self.screen, ic,
+                                 pygame.Rect(ix, iy + 3, 16, 10), border_radius=2)
+                # Folder tab (top-left notch)
+                pygame.draw.rect(self.screen, ic,
+                                 pygame.Rect(ix, iy, 7, 3), border_radius=1)
             elif hov:
-                # Drawing an arrow indicator on the right edge
+                # Arrow indicator on the right edge for all other buttons
                 arrow = self.font_medium.render("›", True, (140, 170, 255))
-                self.screen.blit(arrow, (rect.right - 35, rect.y + bh//2 - arrow.get_height()//2 - 2))
+                self.screen.blit(arrow, (rect.right - 35, rect.y + item_bh//2 - arrow.get_height()//2 - 2))
 
             buttons.append((rect, action))
+            
+            # Advance current_y for next item
+            current_y += item_bh + 12
+            interactive_index += 1
 
         # Footer
         ft = self.font_tiny.render(
