@@ -565,7 +565,7 @@ class Renderer:
     # ------------------------------------------------------------------
     # HUD (heads-up display) — glassmorphism style
     # ------------------------------------------------------------------
-    def draw_hud(self, board, image_mode=False, image_name=""):
+    def draw_hud(self, board, image_mode=False, image_name="", difficulty="medium"):
         """Draw the top bar with glassmorphism effect."""
         # Semi-transparent HUD background
         hud_surf = pygame.Surface((self.WIN_W, self.HUD_H), pygame.SRCALPHA)
@@ -587,13 +587,14 @@ class Renderer:
         title = self.font_medium.render("Sliding Puzzle", True, COLORS["title"])
         self.screen.blit(title, (18, 8))
 
-        # Size & mode badges with pill styling
-        badge_text = f"{board.size}x{board.size}"
-        self._draw_pill(18 + title.get_width() + 10, 12, badge_text, COLORS["hud_accent"])
+        # Difficulty & mode badges with pill styling
+        diff_color = self._DIFF_COLORS.get(difficulty, COLORS["hud_accent"])
+        badge_text = f"{difficulty.capitalize()} {board.size}x{board.size}"
+        self._draw_pill(18 + title.get_width() + 10, 12, badge_text, diff_color)
 
         mode_label = image_name if image_mode and image_name else ("Image" if image_mode else "Numbers")
         self._draw_pill(
-            18 + title.get_width() + 65, 12,
+            18 + title.get_width() + 140, 12,
             mode_label,
             COLORS["hud_accent2"] if image_mode else (100, 120, 150),
         )
@@ -768,8 +769,16 @@ class Renderer:
     # ------------------------------------------------------------------
     # Main menu — premium styling
     # ------------------------------------------------------------------
+    # Difficulty colour map for visual cues
+    _DIFF_COLORS = {
+        "easy":   (60, 200, 120),   # Green
+        "medium": (255, 180, 50),   # Orange
+        "hard":   (240, 70, 70),    # Red
+    }
+
     def draw_menu(self, selected_size=3, image_mode=False, image_name="",
-                  image_count=1, image_idx=0, selected_idx=0):
+                  image_count=1, image_idx=0, selected_idx=0,
+                  difficulty="medium"):
         """
         Draw the main menu and return a list of ``(Rect, action_str)``
         tuples for click detection.
@@ -805,10 +814,12 @@ class Renderer:
         self.screen.blit(bar, (cx - 30, 160))
 
         # Menu buttons
+        diff_label = difficulty.capitalize()
+        diff_size_info = f"{selected_size}x{selected_size}"
         img_label = image_name if image_mode and image_name else "Numbers"
         items = [
             ("New Game", "new_game"),
-            (f"Grid: {selected_size}x{selected_size}", "grid_size"),
+            (f"Difficulty: {diff_label}  ({diff_size_info})", "difficulty"),
             (f"Mode: {img_label}", "tile_mode"),
         ]
         if selected_size == 3:
@@ -837,8 +848,9 @@ class Renderer:
             )
             
             if hov:
-                # Sleek left bar accent
-                pygame.draw.rect(btn_surf, (100, 140, 255), pygame.Rect(14, bh//2 - 12, 4, 24), border_radius=2)
+                # Sleek left bar accent — use difficulty colour for the difficulty button
+                accent = self._DIFF_COLORS.get(difficulty, (100, 140, 255)) if action == "difficulty" else (100, 140, 255)
+                pygame.draw.rect(btn_surf, accent, pygame.Rect(14, bh//2 - 12, 4, 24), border_radius=2)
                 # Outer delicate glass border
                 pygame.draw.rect(btn_surf, (255, 255, 255, 100), pygame.Rect(0, 0, bw, bh), width=1, border_radius=14)
             else:
@@ -855,8 +867,15 @@ class Renderer:
             txt_y = rect.y + bh // 2 - text_surf.get_height() // 2
             
             self.screen.blit(text_surf, (txt_x, txt_y))
-            
-            if hov:
+
+            # Difficulty button — draw a small coloured dot indicator
+            if action == "difficulty":
+                dot_color = self._DIFF_COLORS.get(difficulty, (150, 150, 150))
+                dot_x = rect.right - 40
+                dot_y = rect.y + bh // 2
+                pygame.draw.circle(self.screen, dot_color, (dot_x, dot_y), 6)
+                pygame.draw.circle(self.screen, (255, 255, 255, 120), (dot_x, dot_y), 6, 1)
+            elif hov:
                 # Drawing an arrow indicator on the right edge
                 arrow = self.font_medium.render("›", True, (140, 170, 255))
                 self.screen.blit(arrow, (rect.right - 35, rect.y + bh//2 - arrow.get_height()//2 - 2))

@@ -20,12 +20,25 @@ class Board:
     bottom-right corner.
     """
 
-    def __init__(self, size=3):
+    # Difficulty presets: (grid_size, shuffle_moves or None for full)
+    DIFFICULTY_PRESETS = {
+        "easy":   {"size": 3, "shuffle_moves": 15},
+        "medium": {"size": 3, "shuffle_moves": None},   # Full shuffle
+        "hard":   {"size": 4, "shuffle_moves": None},   # Full shuffle
+    }
+
+    def __init__(self, size=3, difficulty="medium"):
         """
         Initialise a new board of the given *size* (3 → 3×3, 4 → 4×4).
 
+        The *difficulty* parameter controls shuffle intensity:
+          - ``'easy'``   → 3×3 grid, 15 random moves from solved state
+          - ``'medium'`` → 3×3 grid, full random shuffle
+          - ``'hard'``   → 4×4 grid, full random shuffle
+
         The board is automatically shuffled into a valid, solvable state.
         """
+        self.difficulty = difficulty
         self.size = size
         self.goal = get_goal_state(size)
         self.grid = []
@@ -56,7 +69,11 @@ class Board:
         self.total_pause_time = 0.0
         self.move_history = []
         self.solved = False
-        self.shuffle()
+        preset = self.DIFFICULTY_PRESETS.get(self.difficulty)
+        if preset and preset["shuffle_moves"] is not None:
+            self.shuffle_limited(preset["shuffle_moves"])
+        else:
+            self.shuffle()
 
     def shuffle(self):
         """
@@ -98,6 +115,45 @@ class Board:
         # Avoid starting in the solved state
         if self.is_solved():
             self.shuffle()
+
+    def shuffle_limited(self, num_moves=15):
+        """
+        Shuffle by making *num_moves* random moves from the solved state.
+
+        This guarantees solvability (any sequence of moves from the goal
+        is reversible) while producing an easier puzzle than a full
+        random shuffle.  Avoids immediately undoing the previous move
+        so the resulting state is meaningfully shuffled.
+        """
+        self.grid = [row[:] for row in self.goal]
+        opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}
+        last_dir = None
+
+        for _ in range(num_moves):
+            br, bc = self.find_blank()
+            dir_map = {
+                "up":    (br - 1, bc),
+                "down":  (br + 1, bc),
+                "left":  (br, bc - 1),
+                "right": (br, bc + 1),
+            }
+            candidates = []
+            for d, (nr, nc) in dir_map.items():
+                if 0 <= nr < self.size and 0 <= nc < self.size:
+                    if last_dir is None or d != opposite[last_dir]:
+                        candidates.append((d, nr, nc))
+            if not candidates:
+                continue
+            d, nr, nc = random.choice(candidates)
+            self.grid[br][bc], self.grid[nr][nc] = (
+                self.grid[nr][nc],
+                self.grid[br][bc],
+            )
+            last_dir = d
+
+        # Avoid starting in the solved state
+        if self.is_solved():
+            self.shuffle_limited(num_moves)
 
     # ------------------------------------------------------------------
     # Tile movement

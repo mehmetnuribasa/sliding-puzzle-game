@@ -131,6 +131,7 @@ class SlidingPuzzleApp:
         self.menu_buttons = []
         self.menu_selection_idx = 0
         self.is_auto_solve_mode = False
+        self.selected_difficulty = "medium"  # easy / medium / hard
 
         # Multi-image support
         self.available_images = discover_images(IMAGES_DIR)
@@ -195,7 +196,9 @@ class SlidingPuzzleApp:
 
     def _start_new_game(self):
         """Initialise a new game with current settings."""
-        self.board = Board(self.selected_size)
+        preset = Board.DIFFICULTY_PRESETS.get(self.selected_difficulty, {})
+        self.selected_size = preset.get("size", DEFAULT_SIZE)
+        self.board = Board(self.selected_size, self.selected_difficulty)
         self.state = STATE_PLAYING
         self.auto_solving = False
         self.auto_solve_moves = []
@@ -209,9 +212,12 @@ class SlidingPuzzleApp:
         if self.is_auto_solve_mode:
             self._start_auto_solve()
 
-    def _toggle_size(self):
-        """Cycle grid size: 3 -> 4 -> 3."""
-        self.selected_size = 4 if self.selected_size == 3 else 3
+    def _cycle_difficulty(self):
+        """Cycle difficulty: easy -> medium -> hard -> easy."""
+        cycle = {"easy": "medium", "medium": "hard", "hard": "easy"}
+        self.selected_difficulty = cycle[self.selected_difficulty]
+        preset = Board.DIFFICULTY_PRESETS[self.selected_difficulty]
+        self.selected_size = preset["size"]
 
     def _do_tile_move(self, row, col):
         """Attempt to move tile at (row, col), triggering animation."""
@@ -275,8 +281,8 @@ class SlidingPuzzleApp:
         if action == "new_game":
             self.is_auto_solve_mode = False
             self._start_new_game()
-        elif action == "grid_size":
-            self._toggle_size()
+        elif action == "difficulty":
+            self._cycle_difficulty()
         elif action == "tile_mode":
             if not self.image_mode:
                 if self.available_images:
@@ -445,13 +451,15 @@ class SlidingPuzzleApp:
                 len(self.available_images),
                 self.current_image_idx,
                 self.menu_selection_idx,
+                self.selected_difficulty,
             )
         elif self.state in (STATE_PLAYING, STATE_WON):
             # Draw gradient background + particles
             self.renderer.draw_background()
 
             self.hud_buttons = self.renderer.draw_hud(
-                self.board, self.image_mode, self._current_image_name()
+                self.board, self.image_mode, self._current_image_name(),
+                self.selected_difficulty,
             )
             self.renderer.draw_board(self.board, self.image_mode)
 
