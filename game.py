@@ -165,40 +165,64 @@ class Board:
 
     def move_tile(self, row, col):
         """
-        Attempt to slide the tile at (*row*, *col*) into the blank space.
+        Attempt to slide the tile(s) between (*row*, *col*) and the blank space.
+        Supports multi-tile sliding if they are in the same row or col.
 
-        Returns ``True`` if the move was valid and executed, ``False``
-        otherwise.  Starts the timer on the first valid move and checks
-        the win condition after every successful move.
+        Returns a list of tuples for animation: (val, from_r, from_c, to_r, to_c).
         """
         if self.solved or self.paused:
-            return False
+            return []
 
         br, bc = self.find_blank()
 
-        # Only adjacent tiles (Manhattan distance 1) may move
-        if abs(row - br) + abs(col - bc) != 1:
-            return False
+        # Must be in same row or col, and not the blank itself
+        if (row != br and col != bc) or (row == br and col == bc):
+            return []
 
-        # Start timer on the very first move
         if self.start_time is None:
             self.start_time = time.time()
 
-        # Swap tile with blank
-        self.grid[br][bc], self.grid[row][col] = (
-            self.grid[row][col],
-            self.grid[br][bc],
-        )
-        self.move_count += 1
-        self.move_history.append((br, bc))
+        moves = self._execute_multi_move(row, col, br, bc)
 
-        # Win detection
-        if self.is_solved():
-            self.elapsed_time = self.get_elapsed_time()
-            self.solved = True
-            self._update_best_score()
+        if moves:
+            self.move_count += 1
+            # Store the old blank position so undo can reverse the multi-move
+            self.move_history.append((br, bc))
 
-        return True
+            if self.is_solved():
+                self.elapsed_time = self.get_elapsed_time()
+                self.solved = True
+                self._update_best_score()
+
+        return moves
+
+    def _execute_multi_move(self, target_r, target_c, blank_r, blank_c):
+        """Internal helper to shift tiles and return animation data."""
+        moves = []
+        if target_r == blank_r:
+            # Horizontal slide
+            step = 1 if target_c < blank_c else -1
+            curr_c = blank_c
+            while curr_c != target_c:
+                next_c = curr_c - step
+                val = self.grid[target_r][next_c]
+                self.grid[target_r][curr_c] = val
+                moves.append((val, target_r, next_c, target_r, curr_c))
+                curr_c = next_c
+            self.grid[target_r][target_c] = 0
+        else:
+            # Vertical slide
+            step = 1 if target_r < blank_r else -1
+            curr_r = blank_r
+            while curr_r != target_r:
+                next_r = curr_r - step
+                val = self.grid[next_r][target_c]
+                self.grid[curr_r][target_c] = val
+                moves.append((val, next_r, target_c, curr_r, target_c))
+                curr_r = next_r
+            self.grid[target_r][target_c] = 0
+            
+        return moves
 
     def move_by_direction(self, direction):
         """
@@ -206,10 +230,9 @@ class Board:
         ``'left'``, ``'right'``).
 
         The direction refers to the visual movement of the *tile*
-        (not the blank).  For example ``'up'`` slides the tile that is
-        below the blank upward into the gap.
+        (not the blank).
 
-        Returns ``(moved, from_row, from_col)``.
+        Returns a list of tuples for animation: (val, from_r, from_c, to_r, to_c).
         """
         br, bc = self.find_blank()
 
@@ -222,15 +245,14 @@ class Board:
         }
 
         if direction not in dir_map:
-            return False, -1, -1
+            return []
 
         tr, tc = dir_map[direction]
 
         if 0 <= tr < self.size and 0 <= tc < self.size:
-            if self.move_tile(tr, tc):
-                return True, tr, tc
+            return self.move_tile(tr, tc)
 
-        return False, -1, -1
+        return []
 
     # ------------------------------------------------------------------
     # Undo
@@ -240,22 +262,21 @@ class Board:
         """
         Undo the most recent move.
 
-        Returns ``(success, from_row, from_col)`` where *from_row/col*
-        is the position the tile animated *from* (i.e. the current blank
-        that will receive the tile back).
+        Returns a list of tuples for animation: (val, from_r, from_c, to_r, to_c).
         """
         if not self.move_history or self.solved:
-            return False, -1, -1
+            return []
 
-        last_row, last_col = self.move_history.pop()
-        br, bc = self.find_blank()
+        old_br, old_bc = self.move_history.pop()
+        curr_br, curr_bc = self.find_blank()
 
-        self.grid[br][bc], self.grid[last_row][last_col] = (
-            self.grid[last_row][last_col],
-            self.grid[br][bc],
-        )
-        self.move_count = max(0, self.move_count - 1)
-        return True, br, bc
+        # Reversing a multi-move is the same as moving the old blank space
+        moves = self._execute_multi_move(old_br, old_bc, curr_br, curr_bc)
+        
+        if moves:
+            self.move_count = max(0, self.move_count - 1)
+            
+        return moves
 
     # ------------------------------------------------------------------
     # State queries

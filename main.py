@@ -209,7 +209,7 @@ class SlidingPuzzleApp:
         path = filedialog.askopenfilename(
             title="Select a puzzle image",
             filetypes=[
-                ("Image files", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"),
+                ("Image files", "*.png *.jpg *.jpeg *.jfif *.bmp *.gif *.webp"),
                 ("All files", "*.*"),
             ],
         )
@@ -274,12 +274,12 @@ class SlidingPuzzleApp:
         """Attempt to move tile at (row, col), triggering animation."""
         if self.renderer.is_animating():
             return
-        br, bc = self.board.find_blank()
-        val = self.board.get_tile_value(row, col)
-        if self.board.move_tile(row, col):
-            self.renderer.start_animation(
-                val, row, col, br, bc, self.board.size
-            )
+        moves = self.board.move_tile(row, col)
+        if moves:
+            for val, fr, fc, tr, tc in moves:
+                self.renderer.start_animation(
+                    val, fr, fc, tr, tc, self.board.size
+                )
             self._play(self.snd_slide)
             if self.board.solved:
                 self._play(self.snd_win)
@@ -288,13 +288,12 @@ class SlidingPuzzleApp:
         """Move by keyboard direction."""
         if self.renderer.is_animating():
             return
-        br, bc = self.board.find_blank()
-        moved, fr, fc = self.board.move_by_direction(direction)
-        if moved:
-            val = self.board.get_tile_value(br, bc)  # tile is now at blank pos
-            self.renderer.start_animation(
-                val, fr, fc, br, bc, self.board.size
-            )
+        moves = self.board.move_by_direction(direction)
+        if moves:
+            for val, fr, fc, tr, tc in moves:
+                self.renderer.start_animation(
+                    val, fr, fc, tr, tc, self.board.size
+                )
             self._play(self.snd_slide)
             if self.board.solved:
                 self._play(self.snd_win)
@@ -303,13 +302,12 @@ class SlidingPuzzleApp:
         """Undo last move with animation."""
         if self.renderer.is_animating():
             return
-        br, bc = self.board.find_blank()
-        ok, from_r, from_c = self.board.undo()
-        if ok:
-            val = self.board.get_tile_value(from_r, from_c)
-            self.renderer.start_animation(
-                val, br, bc, from_r, from_c, self.board.size
-            )
+        moves = self.board.undo()
+        if moves:
+            for val, fr, fc, tr, tc in moves:
+                self.renderer.start_animation(
+                    val, fr, fc, tr, tc, self.board.size
+                )
             self._play(self.snd_click)
 
     def _start_auto_solve(self):
